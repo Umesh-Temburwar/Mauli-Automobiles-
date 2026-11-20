@@ -33,13 +33,14 @@ tasks.matching {
     dependsOn("processAssets")
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
 android {
     namespace = "dev.fabik.bluetoothhid"
     compileSdk = 37
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     defaultConfig {
         applicationId = "dev.fabik.bluetoothhid"
