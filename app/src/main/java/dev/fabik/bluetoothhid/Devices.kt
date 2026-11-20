@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothProfile
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
@@ -258,6 +262,31 @@ fun DevicesViewModel.DeviceList(
             .padding(12.dp, 0.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        item {
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.mauli_logo),
+                        contentDescription = "Mauli Automobiles Logo",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(84.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
+
         item {
             Text(
                 stringResource(R.string.scanned_devices),
