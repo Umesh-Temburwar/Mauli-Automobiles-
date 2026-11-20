@@ -206,16 +206,20 @@ fun NavGraph() {
             }
 
             composable(Routes.Devices) {
-                LaunchedEffect(Unit) {
-                    controller?.disconnect()
-                }
+                // Keep Bluetooth connected across all screens. Do NOT auto-disconnect on navigating.
 
                 Devices {
-                    navController.navigate(Routes.Main)
+                    navController.navigate(Routes.Dashboard) {
+                        popUpTo(Routes.Dashboard) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
 
                 BackHandler {
-                    navController.navigateUp()
+                    navController.navigate(Routes.Dashboard) {
+                        popUpTo(Routes.Dashboard) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             }
 
@@ -239,17 +243,11 @@ fun NavGraph() {
                     }
                 }
 
-                // In External mode back exits the app instead of returning to Devices
-                BackHandler(enabled = isExternal) {
-                    if (canExit) {
-                        activity?.finishAfterTransition()
-                    } else {
-                        canExit = true
-                        Toast.makeText(activity, exitString, Toast.LENGTH_SHORT).show()
-                        scope.launch {
-                            delay(2000)
-                            canExit = false
-                        }
+                // Returning from Scanner goes safely to Dashboard without disconnecting Bluetooth
+                BackHandler {
+                    navController.navigate(Routes.Dashboard) {
+                        popUpTo(Routes.Dashboard) { inclusive = false }
+                        launchSingleTop = true
                     }
                 }
 
@@ -293,10 +291,10 @@ fun NavGraph() {
 
     // Listen for changes in the current device
     LaunchedEffect(currentDevice) {
-        // When connected to a device, navigate to scanner only if currently on Devices screen
+        // When connected to a device, navigate to Dashboard smoothly (preserving connection!)
         if (currentDevice != null && navController.currentDestination?.route == Routes.Devices) {
-            navController.navigate(Routes.Main) {
-                popUpTo(Routes.Devices)
+            navController.navigate(Routes.Dashboard) {
+                popUpTo(Routes.Dashboard) { inclusive = false }
                 launchSingleTop = true
             }
         }
