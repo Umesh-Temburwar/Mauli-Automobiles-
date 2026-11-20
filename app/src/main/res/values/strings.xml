@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Mauli Automobiles</string>
+    <string name="app_name">MAULI BARCODE</string>
     <string name="scanner">Scanner</string>
     <string name="send_to_device">Send to Device</string>
     <string name="scan_code_to_start">Scan any QR Code / Barcode\nto get started.</string>
@@ -441,4 +441,33 @@
     <string name="value_extra">Value extra</string>
     <string name="format_extra">Format/type extra</string>
     <string name="source_extra">Scan source extra</string>
+
+    <!-- MAULI BARCODE Module Strings -->
+    <string name="dashboard">Dashboard</string>
+    <string name="shop_tagline">Honda &amp; Hero Genuine Spares • Ambajogai</string>
+    <string name="import_pdf">Import Handwritten PDF</string>
+    <string name="import_pdf_desc">Upload customer bill PDF to extract barcodes</string>
+    <string name="ai_extraction">AI Number Extraction</string>
+    <string name="ai_extraction_desc">Read handwritten barcode numbers with AI</string>
+    <string name="verify_barcodes">Verify Barcodes</string>
+    <string name="verify_barcodes_desc">Review, edit, and approve extracted numbers</string>
+    <string name="generate_pdf">Generate Barcode PDF</string>
+    <string name="generate_pdf_desc">Create printable Code 128 barcode sheets</string>
+    <string name="batch_scanner">Batch Barcode Scanner</string>
+    <string name="batch_scanner_desc">Scan printed barcodes continuously into Tally</string>
+    <string name="bluetooth_tally">Bluetooth Connect to Tally</string>
+    <string name="bluetooth_tally_desc">Pair &amp; connect wirelessly to Windows PC</string>
+    <string name="direct_send">Direct Send to Tally</string>
+    <string name="direct_send_desc">Type verified numbers into Tally without printing</string>
+    <string name="reports_history">Scan History &amp; Reports</string>
+    <string name="reports_history_desc">View batch statistics and export to CSV</string>
+    <string name="total_bills">Bills Processed</string>
+    <string name="total_barcodes">Total Barcodes</string>
+    <string name="scanned">Scanned</string>
+    <string name="pending">Pending</string>
+    <string name="verified">Verified</string>
+    <string name="needs_review">Needs Review</string>
+    <string name="duplicate">Duplicate</string>
+    <string name="tally_connected">Connected to Windows Tally</string>
+    <string name="tally_disconnected">PC Not Connected (Tap to Connect)</string>
 </resources>

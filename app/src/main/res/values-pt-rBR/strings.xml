@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Mauli Automobiles</string>
+    <string name="app_name">MAULI BARCODE</string>
     <string name="scanner">Scanner</string>
     <string name="send_to_device">Enviar para o dispositivo</string>
     <string name="scan_code_to_start">Aponte a câmera para um código</string>

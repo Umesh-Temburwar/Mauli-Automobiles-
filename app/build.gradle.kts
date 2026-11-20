@@ -140,6 +140,8 @@ dependencies {
     implementation("androidx.camera:camera-compose:$camerax_version")
 
     implementation("io.github.zxing-cpp:android:3.1.1")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     implementation("com.google.accompanist:accompanist-permissions:$accomp_version")
 

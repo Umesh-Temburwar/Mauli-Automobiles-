@@ -51,6 +51,7 @@ import androidx.compose.foundation.text.input.selectAll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -828,6 +829,15 @@ private fun ScannerAppBar(
     )
 
     TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = { navigation?.navigateUp() }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = if (transparent) Color.White else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        },
         title = {
             Column {
                 Text(

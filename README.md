@@ -13,20 +13,31 @@
 </div>
 
 
-Android application for scanning 1D/2D barcodes with your phone camera and instantly sending them to your Windows PC over Bluetooth. **No receiver or server software is required on the PC** as the phone directly emulates a standard wireless Bluetooth HID Keyboard!
+Android application for spare-parts billing automation, optical 1D/2D barcode scanning, and handwritten customer bill OCR with direct keystroke injection into Windows TallyPrime over Bluetooth. **No receiver or server software is required on the PC** as the phone directly emulates a standard wireless Bluetooth HID Keyboard!
 
-Works natively in **Notepad**, **Microsoft Excel**, **TallyPrime**, **Google Chrome**, and any desktop accounting or billing software.
+Works natively in **TallyPrime**, **Busy Accounting**, **Microsoft Excel**, **Notepad**, **Google Chrome**, and any desktop billing software.
+
+## Complete Workflow (Automobile Shop Bills to TallyPrime)
+
+1. **Import Handwritten Customer Bills**: Select multi-page bill PDFs using Android Storage Access Framework (SAF).
+2. **AI Handwritten Barcode OCR**: Extract handwritten barcode numbers using on-device Google ML Kit Text Recognition (with image preprocessing, noise filtering, and contrast boost) or optional Gemini Vision.
+3. **Verification & Correction Screen**: Review all numbers with confidence status (*Verified*, *Needs Review*, *Duplicate*), inline editing, and validation to preserve leading zeros.
+4. **Printable Barcode Sheet Generator**: Generate standard A4 printable PDF sheets with machine-readable **Code 128 barcodes** and human-readable numbers.
+5. **Batch Barcode Scanner**: Scan printed barcodes one-after-another with progress tracking and instant Bluetooth HID typing into TallyPrime.
+6. **Direct Send Mode**: Send verified barcode numbers straight into TallyPrime sequentially via Bluetooth HID keyboard without needing to print and rescan!
 
 ## Features
 
 - **Zero PC Software**: Emulates a real Bluetooth hardware keyboard (`BluetoothHidDevice` API on Android 9+).
-- **Universal PC Compatibility**: Injects keystrokes directly into whichever Windows application has focus.
-- **High-Speed Optical Scanning**: Powered by [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) supporting EAN-13, UPC, Code 128, QR Code, Data Matrix, etc.
-- **100% Offline**: Zero internet required; works purely via direct Bluetooth radio.
-- **Configurable Suffixes**: Sends trailing Enter (`\n`) or Tab (`\t`) after each scanned code.
-- **Scan History**: Local history log with export to CSV, JSON, or Plain Text.
-- **Flashlight & Continuous Mode**: Built-in torch toggle and hands-free continuous scanning.
-- **Multiple Keyboard Layouts**: US, UK, DE, FR, ES, and custom keymaps.
+- **Universal PC Compatibility**: Injects keystrokes directly into whichever Windows application has focus (Tally voucher fields, item search, etc.).
+- **AI Handwritten Bill OCR**: On-device text recognition optimized for handwritten numeric digits and parts numbers.
+- **Code 128 Printable PDF Generator**: Standard A4 2-column sheets with shop branding and page numbering ready for thermal/laser printers.
+- **Batch Scanning with Progress**: Real-time batch progress (Total, Scanned, Pending, Duplicates) with sound/vibration feedback.
+- **Direct Send Mode**: Automated sequential keyboard injection with configurable key delay and Enter/Tab suffix.
+- **Local SQLite Database**: Full offline persistence for PDF documents, batches, barcode records, and scan history.
+- **CSV & Report Export**: Export detailed scan reports directly to WhatsApp, Gmail, or storage.
+- **In-App Auto-Updates**: Checks for GitHub releases and allows in-place one-click APK updates.
+- **100% Offline Capable**: Direct Bluetooth radio communication requires zero internet.
 
 ## Screenshots
 
