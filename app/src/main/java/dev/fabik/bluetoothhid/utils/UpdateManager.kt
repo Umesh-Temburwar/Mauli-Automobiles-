@@ -56,9 +56,9 @@ data class AppUpdate(
 
 object UpdateManager {
     private const val VERSION_JSON_URL =
-        "https://raw.githubusercontent.com/Umesh-Temburwar/SmartScan/main/version.json"
+        "https://raw.githubusercontent.com/Umesh-Temburwar/Mauli-Automobiles-/main/version.json"
     private const val GITHUB_RELEASES_API =
-        "https://api.github.com/repos/Umesh-Temburwar/SmartScan/releases/latest"
+        "https://api.github.com/repos/Umesh-Temburwar/Mauli-Automobiles-/releases/latest"
 
     /**
      * Checks if a newer version is available.
