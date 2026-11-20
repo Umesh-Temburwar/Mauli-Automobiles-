@@ -1,6 +1,7 @@
 package dev.fabik.bluetoothhid.ui.screens
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,6 +72,12 @@ import dev.fabik.bluetoothhid.SettingsActivity
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.data.SummaryStats
 
+import dev.fabik.bluetoothhid.tally.AutomationMode
+import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
+import dev.fabik.bluetoothhid.tally.TallyProfileRepository
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Stop
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -81,10 +88,15 @@ fun DashboardScreen(
     onNavigateToBluetooth: () -> Unit,
     onNavigateToDirectSend: () -> Unit,
     onNavigateToReports: () -> Unit,
-    onNavigateToCameraScanner: () -> Unit
+    onNavigateToCameraScanner: () -> Unit,
+    onNavigateToTallyAutomation: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val controller = LocalController.current
+    val tallyRepo = remember { TallyProfileRepository.getInstance(context) }
+    val activeProfile by tallyRepo.activeProfile.collectAsStateWithLifecycle()
+    val automationMode by tallyRepo.automationMode.collectAsStateWithLifecycle()
+    val isExecuting by TallyAutomationEngine.isExecuting.collectAsStateWithLifecycle()
     val currentDevice by controller?.currentDevice?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf(null) }
 
@@ -124,6 +136,21 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    // Emergency Stop Action in Dashboard Top Bar
+                    IconButton(onClick = {
+                        TallyAutomationEngine.emergencyStop(controller?.keyboardSender)
+                        Toast.makeText(context, "EMERGENCY STOPPED!", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFD32F2F)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = "Emergency Stop", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
                     IconButton(onClick = {
                         context.startActivity(Intent(context, SettingsActivity::class.java))
                     }) {
@@ -150,6 +177,65 @@ fun DashboardScreen(
                     deviceName = currentDevice?.name ?: currentDevice?.address,
                     onClick = onNavigateToBluetooth
                 )
+            }
+
+            // 1.2 Tally Automation Profile & Mode Banner (Direct Shortcut to Configuration)
+            item {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToTallyAutomation() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFF1E293B)
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFD32F2F)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Keyboard,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "Tally: ${activeProfile.name}",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                "Mode: ${automationMode.name} • ${activeProfile.steps.size} Shortcut Steps",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 11.sp
+                            )
+                        }
+                        Text(
+                            "EDIT ⚙️",
+                            color = Color(0xFFFF5252),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
 
             // 1.5 Hero 1-Tap Photo Bill to Tally (Simplest 1-Click Access for Shopkeeper!)

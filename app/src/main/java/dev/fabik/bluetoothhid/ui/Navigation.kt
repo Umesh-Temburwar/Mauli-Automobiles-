@@ -44,8 +44,14 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import dev.fabik.bluetoothhid.tally.AutomationMode
+import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
+import dev.fabik.bluetoothhid.tally.TallyProfileRepository
+import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
+
 object Routes {
     const val Dashboard = "Dashboard"
+    const val TallyAutomation = "TallyAutomation"
     const val PdfImport = "PdfImport"
     const val Verification = "Verification/{batchId}"
     fun verificationRoute(batchId: Long) = "Verification/$batchId"
@@ -114,7 +120,8 @@ fun NavGraph() {
                     onNavigateToBluetooth = { navController.navigate(Routes.Devices) },
                     onNavigateToDirectSend = { navController.navigate(Routes.directSendRoute(0)) },
                     onNavigateToReports = { navController.navigate(Routes.Reports) },
-                    onNavigateToCameraScanner = { navController.navigate(Routes.Main) }
+                    onNavigateToCameraScanner = { navController.navigate(Routes.Main) },
+                    onNavigateToTallyAutomation = { navController.navigate(Routes.TallyAutomation) }
                 )
 
                 // Confirm back presses to exit the app from Dashboard
@@ -205,6 +212,12 @@ fun NavGraph() {
                 )
             }
 
+            composable(Routes.TallyAutomation) {
+                TallyAutomationScreen(
+                    onNavigateBack = { navController.navigateUp() }
+                )
+            }
+
             composable(Routes.Devices) {
                 // Keep Bluetooth connected across all screens. Do NOT auto-disconnect on navigating.
 
@@ -224,22 +237,54 @@ fun NavGraph() {
             }
 
             composable(Routes.Main) {
+                val tallyRepo = remember { TallyProfileRepository.getInstance(context) }
+                val automationMode by tallyRepo.automationMode.collectAsStateWithLifecycle()
+                val activeProfile by tallyRepo.activeProfile.collectAsStateWithLifecycle()
+
                 // Unbounded channel ensures every barcode result is queued even during active sends
                 val sendQueue = remember { Channel<BarcodeResult>(Channel.UNLIMITED) }
 
-                // Sequential queue processor — each sendString awaits completion before next item
-                LaunchedEffect(controller) {
+                // Sequential queue processor — handles Mode A, Mode B, Mode C
+                LaunchedEffect(controller, automationMode, activeProfile) {
                     for (result in sendQueue) {
                         val barcodeType = ZXingAnalyzer.index2String(result.format)
-                        controller?.sendString(
-                            result.text,
-                            true,
-                            "SCAN",
-                            null,
-                            barcodeType,
-                            imageName = result.imageName,
-                            regexGroups = result.regexGroups
-                        )
+
+                        when (automationMode) {
+                            AutomationMode.BARCODE_ONLY -> {
+                                controller?.sendString(
+                                    result.text,
+                                    true,
+                                    "SCAN",
+                                    null,
+                                    barcodeType,
+                                    imageName = result.imageName,
+                                    regexGroups = result.regexGroups
+                                )
+                            }
+                            AutomationMode.AUTOMATIC -> {
+                                if (controller != null) {
+                                    TallyAutomationEngine.executeProfileSequence(
+                                        scope = scope,
+                                        barcode = result.text,
+                                        profile = activeProfile,
+                                        controller = controller
+                                    )
+                                } else {
+                                    Toast.makeText(context, "Bluetooth PC not connected!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            AutomationMode.MANUAL -> {
+                                controller?.sendString(
+                                    result.text,
+                                    true,
+                                    "SCAN",
+                                    null,
+                                    barcodeType,
+                                    imageName = result.imageName,
+                                    regexGroups = result.regexGroups
+                                )
+                            }
+                        }
                     }
                 }
 

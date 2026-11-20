@@ -118,7 +118,7 @@ open class KeyboardSender(
     suspend fun sendKey(key: Key, releaseDelay: Long = 10) =
         sendKey(key.second.toByte(), key.first.toByte(), releaseDelay = releaseDelay)
 
-    private suspend fun sendKey(
+    suspend fun sendKey(
         key: Byte,
         modifier: Byte = 0,
         releaseKey: Boolean = true,

@@ -28,7 +28,12 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.ui.draw.clip
+import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -818,6 +823,7 @@ private fun ScannerAppBar(
 ) {
     val navigation = LocalNavigation.current
     val context = LocalContext.current
+    val controller = LocalController.current
     val connectionMode by context.getPreferenceState(PreferenceStore.CONNECTION_MODE)
     val isExternal = connectionMode == ConnectionMode.EXTERNAL.ordinal
 
@@ -867,6 +873,30 @@ private fun ScannerAppBar(
             }
         },
         actions = {
+            // Emergency Stop for running Tally automation sequences
+            IconButton(
+                onClick = {
+                    TallyAutomationEngine.emergencyStop(controller?.keyboardSender)
+                    Toast.makeText(context, "EMERGENCY STOPPED!", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.tooltip("Emergency Stop Tally Automation")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFD32F2F)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Stop,
+                        contentDescription = "Emergency Stop",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
             if (camera != null && info != null && info.hasFlashUnit()) {
                 ToggleFlashButton(camera, info, transparent)
             }
