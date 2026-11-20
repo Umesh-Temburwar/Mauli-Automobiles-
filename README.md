@@ -1,80 +1,41 @@
 <div align="center">
-  <a href="https://github.com/Fabi019/hid-barcode-scanner/actions/workflows/android.yml"><img src="https://github.com/Fabi019/hid-barcode-scanner/actions/workflows/android.yml/badge.svg" /></a>
-  <a href="https://play.google.com/store/apps/details?id=dev.fabik.bluetoothhid&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1"><img src="https://img.shields.io/endpoint?color=brightgreen&logo=google-play&logoColor=white&url=https%3A%2F%2Fplay.cuzi.workers.dev%2Fplay%3Fi%3Ddev.fabik.bluetoothhid%26l%3DDownloads%26m%3D%24totalinstalls"></a>
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fkitswas%2Ffdroid-metrics-dashboard%2Fraw%2Frefs%2Fheads%2Fmain%2Fprocessed%2Ftotal%2Fdev.fabik.bluetoothhid.json&query=%24.total_downloads&logo=fdroid&label=Downloads" alt='Downloads (all time)'>
-  <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/Fabi019/hid-barcode-scanner/total?logo=github&label=Downloads">
-  <a href="https://github.com/Fabi019/hid-barcode-scanner/actions/workflows/test.yml"><img src="https://github.com/Fabi019/hid-barcode-scanner/actions/workflows/test.yml/badge.svg" /></a>
+  <a href="https://github.com/Umesh-Temburwar/SmartScan/actions/workflows/test.yml"><img src="https://github.com/Umesh-Temburwar/SmartScan/actions/workflows/test.yml/badge.svg" /></a>
 
   <br/>
   <br/>
 
   <img alt="App Logo" src="app/src/main/ic_launcher-playstore.png" width="100" />
 
-  <h1>HID Barcode Scanner</h1>
+  <h1>SmartScan — Bluetooth HID Barcode Scanner</h1>
+  <p><b>Turn your Android Phone into a Wireless Bluetooth Keyboard Barcode Scanner</b></p>
+  <p>Maintained by <b>Umesh Temburwar</b> (MAULI AUTOMOBILE)</p>
 </div>
 
 
-Android app for scanning barcodes with the phone camera and sending them to a PC via bluetooth. No
-special software is required on the PC as this app uses the BluetoothHID API available on devices
-running Android 9 or greater.
+Android application for scanning 1D/2D barcodes with your phone camera and instantly sending them to your Windows PC over Bluetooth. **No receiver or server software is required on the PC** as the phone directly emulates a standard wireless Bluetooth HID Keyboard!
+
+Works natively in **Notepad**, **Microsoft Excel**, **TallyPrime**, **Google Chrome**, and any desktop accounting or billing software.
 
 ## Features
 
-- Supports a wide range of Linear and 2D-Codes thanks to
-  the [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) library
-- Doesn't require any internet connection
-- History feature that allows exporting the session as text, JSON or CSV
-- Multiple different keyboard layouts to choose from
-- Large amount of customization for different use-cases
-    - Extra keys like \n or \t
-    - Template engine to send additional special keys including modifier combinations
-    - Regex filtering of codes with support for capture group extraction
-    - JavaScript engine to implement custom logic based on the value and type
-    - Auto connect with last device
-    - Auto send on detection
-    - And much more
+- **Zero PC Software**: Emulates a real Bluetooth hardware keyboard (`BluetoothHidDevice` API on Android 9+).
+- **Universal PC Compatibility**: Injects keystrokes directly into whichever Windows application has focus.
+- **High-Speed Optical Scanning**: Powered by [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) supporting EAN-13, UPC, Code 128, QR Code, Data Matrix, etc.
+- **100% Offline**: Zero internet required; works purely via direct Bluetooth radio.
+- **Configurable Suffixes**: Sends trailing Enter (`\n`) or Tab (`\t`) after each scanned code.
+- **Scan History**: Local history log with export to CSV, JSON, or Plain Text.
+- **Flashlight & Continuous Mode**: Built-in torch toggle and hands-free continuous scanning.
+- **Multiple Keyboard Layouts**: US, UK, DE, FR, ES, and custom keymaps.
 
 ## Screenshots
 
-Device list and Scanner screen. If you don't want to connect with any device now and just want to
-try out the scanner, pressing the 'Skip'-Button at the bottom of the paired devices will bring you
-directly to the scanner.
+<img alt="Devices" src="img/devices.png" width="200px" /> <img alt="Main" src="img/main.png" width="200px" /> <img alt="Settings" src="img/settings1.png" width="200px" /> <img alt="Settings" src="img/settings2.png" width="200px" />
 
-Otherwise, the app tries to connect with the selected device and automatically sends you to the
-scanner once connected.
+## Download & Build
 
-<img alt="Devices" src="img/devices.png" width="200px" /> <img alt="Main" src="img/main.png" width="200px" />
-
-All configurable Settings. *(Newer versions might contain more or less settings as shown in the
-pictures)*
-
-<img alt="Settings" src="img/settings1.png" width="200px" /> <img alt="Settings" src="img/settings2.png" width="200px" />
-
-## Download
-
-<div>
-  <img alt="F-Droid Version" src="https://img.shields.io/f-droid/v/dev.fabik.bluetoothhid">
-  <img alt="IzzyOnDroid" src="https://img.shields.io/endpoint?url=https://apt.izzysoft.de/fdroid/api/v1/shield/dev.fabik.bluetoothhid&label=IzzyOnDroid">
-  <img alt="GooglePlay" src="https://img.shields.io/endpoint?url=https://play.cuzi.workers.dev/play?i=dev.fabik.bluetoothhid&gl=US&hl=en&label=PlayStore&m=$version">
-  <img alt="GitHub" src="https://img.shields.io/github/v/release/Fabi019/hid-barcode-scanner?include_prereleases&label=GitHub">
-</div>
-
-[<img src="https://f-droid.org/badge/get-it-on.png" width='200px'>](https://f-droid.org/packages/dev.fabik.bluetoothhid)
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it at IzzyOnDroid" width='200px'>](https://apt.izzysoft.de/packages/dev.fabik.bluetoothhid)
-[<img alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png' width='200px'/>](https://play.google.com/store/apps/details?id=dev.fabik.bluetoothhid)
-[<img src="https://raw.githubusercontent.com/rubenpgrady/get-it-on-github/refs/heads/main/get-it-on-github.png" width='200px'>](https://github.com/Fabi019/hid-barcode-scanner/releases)
-
-> [!NOTE]
-> Google signs the app on the Play Store with a different key. Because of this, once you install the app from Google Play, you can only switch to another source by uninstalling the app first.
-
-### Download nightly builds from [CI](https://github.com/Fabi019/hid-barcode-scanner/actions/workflows/test.yml)
-
-Please note that the CI version might be unstable and that the builds are not signed (debug
-builds), thus requiring you to install them on your phone using *ADB*. The download links below
-are using *nightly.link* to provide the files because GitHub doesn't allow to download files from
-actions without being logged in.
-
-- Latest APK (Debug): [here](https://nightly.link/Fabi019/hid-barcode-scanner/workflows/test/main/APK%28s%29%20debug%20generated.zip)
+- **Automated APK Builds**: Download the ready-to-install debug APK directly from GitHub Actions:  
+  [SmartScan GitHub Actions Builds](https://github.com/Umesh-Temburwar/SmartScan/actions/workflows/test.yml)
+- **Setup Guide**: Read the step-by-step connection instructions in [SETUP_GUIDE.md](SETUP_GUIDE.md) or [HOW_TO_CONNECT_MOBILE_TO_PC.md](HOW_TO_CONNECT_MOBILE_TO_PC.md).
 
 ## Troubleshooting
 
@@ -367,9 +328,16 @@ val intent = Intent("dev.fabik.bluetoothhid.plugin.action.STATUS").apply {
 ctx.sendBroadcast(intent)
 ```
 
+## Author & Maintainer
+
+- **Developer**: **Umesh Temburwar**
+- **Organization / Business**: **MAULI AUTOMOBILE**
+- **Repository**: [https://github.com/Umesh-Temburwar/SmartScan](https://github.com/Umesh-Temburwar/SmartScan)
+
 ## License
 
-Copyright (C) 2023-2026 Fabi019
+Copyright (C) 2026 Umesh Temburwar / MAULI AUTOMOBILE  
+Based on BluetoothHID: Copyright (C) 2023-2026 Fabi019
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -380,5 +348,3 @@ Copyright (C) 2023-2026 Fabi019
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
-*Google Play and the Google Play logo are trademarks of Google LLC.*

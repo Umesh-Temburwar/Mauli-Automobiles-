@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">BT Scanner</string>
+    <string name="app_name">SmartScan</string>
     <string name="scanner">Scanner</string>
     <string name="send_to_device">Send to Device</string>
     <string name="scan_code_to_start">Scan any QR Code / Barcode\nto get started.</string>

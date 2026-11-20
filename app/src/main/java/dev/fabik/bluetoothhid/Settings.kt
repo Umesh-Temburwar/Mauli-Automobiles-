@@ -703,7 +703,7 @@ internal fun buildAboutSettings(
             desc = strings[R.string.source_code_desc],
             icon = Icons.Default.Code,
         ) {
-            uriHandler.openUri("https://github.com/Fabi019/hid-barcode-scanner")
+            uriHandler.openUri("https://github.com/Umesh-Temburwar/SmartScan")
         }
     }
 
@@ -722,7 +722,7 @@ internal fun buildAboutSettings(
                 }
             }
         ) {
-            uriHandler.openUri("https://github.com/Fabi019/hid-barcode-scanner/issues/new")
+            uriHandler.openUri("https://github.com/Umesh-Temburwar/SmartScan/issues/new")
         }
     }
 
