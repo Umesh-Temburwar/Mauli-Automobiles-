@@ -1,6 +1,12 @@
-# HID Barcode Scanner — Complete Mobile to PC Bluetooth Setup Guide
+# Mauli Automobiles — Mobile to PC Barcode Scanner Setup Guide
 
-Turn your Android smartphone into a **physical wireless Bluetooth barcode scanner** for your Windows PC!
+Turn your Android smartphone into a **wireless Bluetooth barcode scanner** for **Mauli Automobiles** counter billing and inventory management!
+
+### Shop Details
+* **Shop**: **Mauli Automobiles** (मौली ऑटोमोबाईल्स)
+* **Specialization**: Honda & Hero Genuine 2-Wheelers Spares (Wholesale & Retail)
+* **Address**: Kallam Ambajogai Road, Ambajogai, Maharashtra 431517
+* **Contact**: 098232 91444
 
 > **Why this is better than other barcode apps:**
 > - **Zero PC Software Required**: You do **not** need to install or run any software on your Windows PC.

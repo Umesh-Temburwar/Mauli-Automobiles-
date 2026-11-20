@@ -1,7 +1,12 @@
-# How to Connect Mobile to PC (Bluetooth HID Barcode Scanner)
+# Mauli Automobiles — How to Connect Mobile Scanner to PC
+
+**Mauli Automobiles (Honda & Hero Genuine Spares)**  
+Kallam Ambajogai Road, Ambajogai | Call: 098232 91444
+
+---
 
 ## Quick Summary
-**No receiver software needed on Windows!** Your phone connects directly to your PC as a Bluetooth wireless keyboard.
+**PC par koi software open karne ki zaroorat nahi hai!** Mobile phone seedhe PC ke sath wireless keyboard ki tarah pair ho jata hai.
 
 ---
 

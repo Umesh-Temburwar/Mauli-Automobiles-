@@ -6,9 +6,10 @@
 
   <img alt="App Logo" src="app/src/main/ic_launcher-playstore.png" width="100" />
 
-  <h1>SmartScan — Bluetooth HID Barcode Scanner</h1>
-  <p><b>Turn your Android Phone into a Wireless Bluetooth Keyboard Barcode Scanner</b></p>
-  <p>Maintained by <b>Umesh Temburwar</b> (MAULI AUTOMOBILE)</p>
+  <h1>Mauli Automobiles — Wireless Barcode Scanner</h1>
+  <p><b>Honda & Hero Genuine 2-Wheelers Spares (Wholesale & Retail)</b></p>
+  <p>Kallam Ambajogai Road, Ambajogai, Maharashtra 431517 | Contact: 098232 91444</p>
+  <p>Maintained by <b>Umesh Temburwar</b></p>
 </div>
 
 
