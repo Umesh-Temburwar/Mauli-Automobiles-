@@ -1,0 +1,305 @@
+package dev.fabik.bluetoothhid.ui
+
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import dev.fabik.bluetoothhid.Devices
+import dev.fabik.bluetoothhid.History
+import dev.fabik.bluetoothhid.LocalController
+import dev.fabik.bluetoothhid.R
+import dev.fabik.bluetoothhid.Scanner
+import dev.fabik.bluetoothhid.ui.model.BarcodeResult
+import dev.fabik.bluetoothhid.ui.screens.BarcodePdfScreen
+import dev.fabik.bluetoothhid.ui.screens.BatchScannerScreen
+import dev.fabik.bluetoothhid.ui.screens.DashboardScreen
+import dev.fabik.bluetoothhid.ui.screens.DirectSendScreen
+import dev.fabik.bluetoothhid.ui.screens.PdfImportScreen
+import dev.fabik.bluetoothhid.ui.screens.ReportsScreen
+import dev.fabik.bluetoothhid.ui.screens.VerificationScreen
+import dev.fabik.bluetoothhid.utils.ConnectionMode
+import dev.fabik.bluetoothhid.utils.PreferenceStore
+import dev.fabik.bluetoothhid.utils.ZXingAnalyzer
+import dev.fabik.bluetoothhid.utils.getPreferenceStateBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+object Routes {
+    const val Dashboard = "Dashboard"
+    const val PdfImport = "PdfImport"
+    const val Verification = "Verification/{batchId}"
+    fun verificationRoute(batchId: Long) = "Verification/$batchId"
+    const val BarcodePdf = "BarcodePdf/{batchId}"
+    fun barcodePdfRoute(batchId: Long) = "BarcodePdf/$batchId"
+    const val BatchScanner = "BatchScanner/{batchId}"
+    fun batchScannerRoute(batchId: Long) = "BatchScanner/$batchId"
+    const val DirectSend = "DirectSend/{batchId}"
+    fun directSendRoute(batchId: Long) = "DirectSend/$batchId"
+    const val Reports = "Reports"
+
+    const val Devices = "Devices"
+    const val Main = "Main"
+    const val History = "History"
+}
+
+val LocalNavigation = staticCompositionLocalOf<NavHostController> {
+    error("No Navigation provided")
+}
+
+@Composable
+fun NavGraph() {
+    val controller = LocalController.current
+    val activity = LocalActivity.current
+    val scope = rememberCoroutineScope()
+    val navController = rememberNavController()
+
+    var canExit by remember { mutableStateOf(false) }
+    val exitString = stringResource(R.string.exit_confirm)
+
+    // External mode has no Bluetooth device, so it starts directly on the scanner and the
+    // controller manages its own lifecycle (no disconnect on navigation).
+    val context = LocalContext.current
+    val connectionMode by context.getPreferenceStateBlocking(PreferenceStore.CONNECTION_MODE)
+    val isExternal = connectionMode == ConnectionMode.EXTERNAL.ordinal
+
+    // Handles shortcut to scanner/history
+    val startDestination = remember {
+        when (activity?.intent?.dataString) {
+            "Scanner" -> Routes.Main
+            "History" -> Routes.History
+            else -> null
+        }
+    }
+
+    LaunchedEffect(startDestination) {
+        startDestination?.let {
+            navController.navigate(it)
+        }
+    }
+
+    val currentDevice by controller?.currentDevice?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf(null) }
+
+    CompositionLocalProvider(LocalNavigation provides navController) {
+        NavHost(
+            navController,
+            startDestination ?: if (isExternal) Routes.Main else Routes.Dashboard
+        ) {
+            composable(Routes.Dashboard) {
+                DashboardScreen(
+                    onNavigateToPdfImport = { navController.navigate(Routes.PdfImport) },
+                    onNavigateToVerify = { navController.navigate(Routes.verificationRoute(0)) },
+                    onNavigateToGeneratePdf = { navController.navigate(Routes.barcodePdfRoute(0)) },
+                    onNavigateToBatchScanner = { navController.navigate(Routes.batchScannerRoute(0)) },
+                    onNavigateToBluetooth = { navController.navigate(Routes.Devices) },
+                    onNavigateToDirectSend = { navController.navigate(Routes.directSendRoute(0)) },
+                    onNavigateToReports = { navController.navigate(Routes.Reports) },
+                    onNavigateToCameraScanner = { navController.navigate(Routes.Main) }
+                )
+
+                // Confirm back presses to exit the app from Dashboard
+                BackHandler {
+                    if (canExit) {
+                        activity?.finishAfterTransition()
+                    } else {
+                        canExit = true
+                        Toast.makeText(activity, exitString, Toast.LENGTH_SHORT).show()
+                        scope.launch {
+                            delay(2000)
+                            canExit = false
+                        }
+                    }
+                }
+            }
+
+            composable(Routes.PdfImport) {
+                PdfImportScreen(
+                    onNavigateBack = { navController.navigateUp() },
+                    onNavigateToVerify = { batchId ->
+                        navController.navigate(Routes.verificationRoute(batchId)) {
+                            popUpTo(Routes.Dashboard)
+                        }
+                    }
+                )
+            }
+
+            composable(
+                route = Routes.Verification,
+                arguments = listOf(navArgument("batchId") { type = NavType.LongType; defaultValue = 0L })
+            ) { backStackEntry ->
+                val bId = backStackEntry.arguments?.getLong("batchId") ?: 0L
+                VerificationScreen(
+                    batchId = bId,
+                    onNavigateBack = { navController.navigateUp() },
+                    onNavigateToGeneratePdf = { targetBatchId ->
+                        navController.navigate(Routes.barcodePdfRoute(targetBatchId))
+                    },
+                    onNavigateToDirectSend = { targetBatchId ->
+                        navController.navigate(Routes.directSendRoute(targetBatchId))
+                    }
+                )
+            }
+
+            composable(
+                route = Routes.BarcodePdf,
+                arguments = listOf(navArgument("batchId") { type = NavType.LongType; defaultValue = 0L })
+            ) { backStackEntry ->
+                val bId = backStackEntry.arguments?.getLong("batchId") ?: 0L
+                BarcodePdfScreen(
+                    batchId = bId,
+                    onNavigateBack = { navController.navigateUp() },
+                    onNavigateToBatchScanner = { targetBatchId ->
+                        navController.navigate(Routes.batchScannerRoute(targetBatchId))
+                    }
+                )
+            }
+
+            composable(
+                route = Routes.BatchScanner,
+                arguments = listOf(navArgument("batchId") { type = NavType.LongType; defaultValue = 0L })
+            ) { backStackEntry ->
+                val bId = backStackEntry.arguments?.getLong("batchId") ?: 0L
+                BatchScannerScreen(
+                    batchId = bId,
+                    onNavigateBack = { navController.navigateUp() }
+                )
+            }
+
+            composable(
+                route = Routes.DirectSend,
+                arguments = listOf(navArgument("batchId") { type = NavType.LongType; defaultValue = 0L })
+            ) { backStackEntry ->
+                val bId = backStackEntry.arguments?.getLong("batchId") ?: 0L
+                DirectSendScreen(
+                    batchId = bId,
+                    onNavigateBack = { navController.navigateUp() }
+                )
+            }
+
+            composable(Routes.Reports) {
+                ReportsScreen(
+                    onNavigateBack = { navController.navigateUp() },
+                    onSelectBatch = { selectedBatchId ->
+                        navController.navigate(Routes.verificationRoute(selectedBatchId))
+                    }
+                )
+            }
+
+            composable(Routes.Devices) {
+                LaunchedEffect(Unit) {
+                    controller?.disconnect()
+                }
+
+                Devices {
+                    navController.navigate(Routes.Main)
+                }
+
+                BackHandler {
+                    navController.navigateUp()
+                }
+            }
+
+            composable(Routes.Main) {
+                // Unbounded channel ensures every barcode result is queued even during active sends
+                val sendQueue = remember { Channel<BarcodeResult>(Channel.UNLIMITED) }
+
+                // Sequential queue processor — each sendString awaits completion before next item
+                LaunchedEffect(controller) {
+                    for (result in sendQueue) {
+                        val barcodeType = ZXingAnalyzer.index2String(result.format)
+                        controller?.sendString(
+                            result.text,
+                            true,
+                            "SCAN",
+                            null,
+                            barcodeType,
+                            imageName = result.imageName,
+                            regexGroups = result.regexGroups
+                        )
+                    }
+                }
+
+                // In External mode back exits the app instead of returning to Devices
+                BackHandler(enabled = isExternal) {
+                    if (canExit) {
+                        activity?.finishAfterTransition()
+                    } else {
+                        canExit = true
+                        Toast.makeText(activity, exitString, Toast.LENGTH_SHORT).show()
+                        scope.launch {
+                            delay(2000)
+                            canExit = false
+                        }
+                    }
+                }
+
+                Scanner(currentDevice) { result: BarcodeResult ->
+                    sendQueue.trySend(result)
+                }
+            }
+
+            composable(Routes.History) {
+                val onBack: () -> Unit = {
+                    navController.navigateUp()
+                }
+
+                History(onBack) { historyEntry ->
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val barcodeType = historyEntry.format.let { ZXingAnalyzer.index2String(it) }
+                        controller?.sendString(
+                            historyEntry.value,
+                            true,
+                            "HISTORY",
+                            historyEntry.timestamp,
+                            barcodeType
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    ExternalInputReceiver { code, format, source ->
+        CoroutineScope(Dispatchers.IO).launch {
+            controller?.sendString(
+                code,
+                true,
+                source ?: "EXTERNAL_INPUT",
+                System.currentTimeMillis(),
+                format
+            )
+        }
+    }
+
+    // Listen for changes in the current device
+    LaunchedEffect(currentDevice) {
+        // When connected to a device, navigate to scanner only if currently on Devices screen
+        if (currentDevice != null && navController.currentDestination?.route == Routes.Devices) {
+            navController.navigate(Routes.Main) {
+                popUpTo(Routes.Devices)
+                launchSingleTop = true
+            }
+        }
+    }
+
+}

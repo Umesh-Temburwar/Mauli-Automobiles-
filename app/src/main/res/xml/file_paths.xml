@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path
+        name="capture"
+        path="." />
+    <external-cache-path
+        name="ext_cache"
+        path="." />
+    <files-path
+        name="files"
+        path="." />
+</paths>
