@@ -72,6 +72,22 @@ object BarcodeGenerator {
     }
 
     /**
+     * Safe generator that never throws exceptions. Returns null on encoding failure.
+     */
+    fun generateCode128Safe(
+        content: String,
+        width: Int = 600,
+        height: Int = 200,
+        showText: Boolean = true
+    ): Bitmap? {
+        return try {
+            if (content.isBlank()) null else generateCode128(content, width, height, showText)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * Validates that the generated barcode decodes back to the exact expected content.
      * Guarantees 100% round-trip accuracy.
      */
