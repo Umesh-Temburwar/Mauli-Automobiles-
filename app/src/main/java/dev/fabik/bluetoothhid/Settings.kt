@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.annotation.ArrayRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
@@ -26,6 +27,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import dev.fabik.bluetoothhid.utils.AppUpdate
+import dev.fabik.bluetoothhid.utils.UpdateDialog
+import dev.fabik.bluetoothhid.utils.UpdateManager
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -742,6 +749,38 @@ internal fun buildAboutSettings(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+
+    add {
+        var manualUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+        var isChecking by remember { mutableStateOf(false) }
+
+        manualUpdate?.let { update ->
+            UpdateDialog(update = update, onDismiss = { manualUpdate = null })
+        }
+
+        ButtonPreference(
+            title = "Check for Updates",
+            desc = if (isChecking) "अपडेट जाँचा जा रहा है..." else "नया वर्जन देखें (वर्तमान: v${BuildConfig.VERSION_NAME})",
+            icon = Icons.Default.SystemUpdate
+        ) {
+            if (!isChecking) {
+                isChecking = true
+                scope.launch {
+                    val update = UpdateManager.checkForUpdate()
+                    isChecking = false
+                    if (update != null) {
+                        manualUpdate = update
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "आप पहले से ही नवीनतम वर्जन (v${BuildConfig.VERSION_NAME}) का उपयोग कर रहे हैं!",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
             }
         }
     }

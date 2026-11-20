@@ -3,4 +3,10 @@
     <cache-path
         name="capture"
         path="." />
+    <external-cache-path
+        name="ext_cache"
+        path="." />
+    <files-path
+        name="files"
+        path="." />
 </paths>

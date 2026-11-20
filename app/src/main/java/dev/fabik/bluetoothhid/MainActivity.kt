@@ -10,7 +10,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,10 +22,13 @@ import dev.fabik.bluetoothhid.ui.NavGraph
 import dev.fabik.bluetoothhid.ui.RequiresBluetoothPermission
 import dev.fabik.bluetoothhid.ui.theme.BluetoothHIDTheme
 import dev.fabik.bluetoothhid.ui.theme.configureWindow
+import dev.fabik.bluetoothhid.utils.AppUpdate
 import dev.fabik.bluetoothhid.utils.JsEngineService
 import dev.fabik.bluetoothhid.utils.LocalDataStore
 import dev.fabik.bluetoothhid.utils.PreferenceStore
 import dev.fabik.bluetoothhid.utils.ProfileManager
+import dev.fabik.bluetoothhid.utils.UpdateDialog
+import dev.fabik.bluetoothhid.utils.UpdateManager
 import dev.fabik.bluetoothhid.utils.getPreferenceState
 import dev.fabik.bluetoothhid.utils.rememberJsEngineService
 import kotlinx.coroutines.runBlocking
@@ -57,6 +62,19 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalDataStore provides activeDataStore) {
                 BluetoothHIDTheme(window = window) {
                     Surface(Modifier.fillMaxSize()) {
+                        var availableUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+
+                        LaunchedEffect(Unit) {
+                            availableUpdate = UpdateManager.checkForUpdate()
+                        }
+
+                        availableUpdate?.let { update ->
+                            UpdateDialog(
+                                update = update,
+                                onDismiss = { availableUpdate = null }
+                            )
+                        }
+
                         val allowScreenRotation by getPreferenceState(PreferenceStore.ALLOW_SCREEN_ROTATION)
 
                         allowScreenRotation?.let {
