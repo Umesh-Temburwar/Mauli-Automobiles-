@@ -27,10 +27,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Button
@@ -44,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -106,6 +109,38 @@ fun PdfImportScreen(
     var processingProgress by remember { mutableFloatStateOf(0f) }
     var processingStatusText by remember { mutableStateOf("") }
 
+    fun processLoadedFile(file: File, originalName: String) {
+        scope.launch {
+            try {
+                isProcessing = true
+                processingStatusText = "Loading document pages..."
+                thumbnails.clear()
+                selectedPages.clear()
+
+                selectedPdfFile = file
+                pdfFileName = originalName
+                totalPages = PdfImporter.getPageCount(file)
+
+                processingStatusText = "Rendering preview..."
+                withContext(Dispatchers.IO) {
+                    for (i in 0 until totalPages) {
+                        val thumb = PdfImporter.renderPageThumbnail(file, i, targetWidth = 260)
+                        withContext(Dispatchers.Main) {
+                            thumbnails.add(thumb)
+                            selectedPages.add(i) // select all pages by default
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error loading document: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isProcessing = false
+            }
+        }
+    }
+
+    // 1. PDF File Picker Launcher
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -113,29 +148,54 @@ fun PdfImportScreen(
             scope.launch {
                 try {
                     isProcessing = true
-                    processingStatusText = "Loading PDF document..."
-                    thumbnails.clear()
-                    selectedPages.clear()
-
-                    val file = PdfImporter.copyPdfToInternalStorage(context, uri)
-                    selectedPdfFile = file
-                    pdfFileName = PdfImporter.getFileName(context, uri)
-                    totalPages = PdfImporter.getPageCount(file)
-
-                    processingStatusText = "Rendering thumbnails..."
-                    withContext(Dispatchers.IO) {
-                        for (i in 0 until totalPages) {
-                            val thumb = PdfImporter.renderPageThumbnail(file, i, targetWidth = 260)
-                            withContext(Dispatchers.Main) {
-                                thumbnails.add(thumb)
-                                selectedPages.add(i) // select all pages by default
-                            }
-                        }
-                    }
+                    processingStatusText = "Reading document..."
+                    val file = PdfImporter.copyOrConvertMediaToInternalPdf(context, uri)
+                    val name = PdfImporter.getFileName(context, uri)
+                    processLoadedFile(file, name)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(context, "Error loading PDF: ${e.message}", Toast.LENGTH_LONG).show()
-                } finally {
+                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_LONG).show()
+                    isProcessing = false
+                }
+            }
+        }
+    }
+
+    // 2. Image Picker Launcher (From Gallery / WhatsApp)
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    isProcessing = true
+                    processingStatusText = "Converting photo to document..."
+                    val file = PdfImporter.copyOrConvertMediaToInternalPdf(context, uri)
+                    val name = PdfImporter.getFileName(context, uri)
+                    processLoadedFile(file, name)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "Error loading photo: ${e.message}", Toast.LENGTH_LONG).show()
+                    isProcessing = false
+                }
+            }
+        }
+    }
+
+    // 3. Camera Capture Launcher (Take Photo of Paper Bill)
+    val cameraCaptureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            scope.launch {
+                try {
+                    isProcessing = true
+                    processingStatusText = "Processing camera bill photo..."
+                    val file = PdfImporter.convertBitmapToInternalPdf(context, bitmap, "camera_bill_${System.currentTimeMillis()}")
+                    processLoadedFile(file, "Camera_Bill_${SimpleDateFormat("HHmmss", Locale.getDefault()).format(Date())}.pdf")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "Error processing camera photo: ${e.message}", Toast.LENGTH_LONG).show()
                     isProcessing = false
                 }
             }
@@ -145,7 +205,7 @@ fun PdfImportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Import Handwritten Bill PDF", fontWeight = FontWeight.Bold) },
+                title = { Text("Import Customer Bill (बिल अपलोड)", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -161,218 +221,251 @@ fun PdfImportScreen(
                 .padding(16.dp)
         ) {
             if (selectedPdfFile == null) {
-                // Empty state: Upload prompt
+                // Empty state: Upload options (PDF, Gallery, Camera)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 60.dp),
+                        .padding(bottom = 40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    ElevatedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                        )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE3F2FD)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.CloudUpload,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
+                            Icon(
+                                Icons.Default.DocumentScanner,
+                                contentDescription = null,
+                                tint = Color(0xFF1976D2),
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "ग्राहक बिल अपलोड करा (Import Customer Bill)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Text(
+                            text = "PDF, गॅलरीतील फोटो किंवा थेट कॅमेऱ्याने फोटो काढा",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Option 1: Take Photo with Camera
+                        Button(
+                            onClick = { cameraCaptureLauncher.launch(null) },
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .height(52.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD32F2F)
+                            )
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Take Photo of Bill (कॅमेऱ्याने फोटो काढा)", fontWeight = FontWeight.Bold)
+                        }
+
+                        // Option 2: Select PDF Document
+                        Button(
+                            onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf", "image/*")) },
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .height(52.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF1976D2)
+                            )
+                        ) {
+                            Icon(Icons.Default.PictureAsPdf, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Select PDF File (PDF फाइल निवडा)", fontWeight = FontWeight.Bold)
+                        }
+
+                        // Option 3: Choose Image from Gallery
+                        OutlinedButton(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .height(52.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Choose Image from Gallery (गॅलरी फोटो)", fontWeight = FontWeight.Bold)
+                        }
+
+                        if (isProcessing) {
                             Spacer(modifier = Modifier.height(16.dp))
+                            CircularProgressIndicator()
                             Text(
-                                "Select Handwritten Bill PDF",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
+                                processingStatusText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                            Text(
-                                "ग्राहक बिल PDF निवडा (Single or Multi-Page)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Button(
-                                onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Browse PDF Files")
-                            }
                         }
                     }
                 }
             } else {
-                // PDF Loaded State
+                // Document Loaded: Metadata & Thumbnail Selection
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.PictureAsPdf,
-                            contentDescription = null,
-                            tint = Color(0xFFD32F2F),
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = pdfFileName,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = "$totalPages Pages • ${selectedPages.size} Selected",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Button(
-                            onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                            shape = RoundedCornerShape(8.dp)
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Change")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    pdfFileName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "$totalPages Page(s) • ${selectedPages.size} Selected for AI Extraction",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    selectedPdfFile = null
+                                    thumbnails.clear()
+                                    selectedPages.clear()
+                                }
+                            ) {
+                                Text("Change File")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = billNumber,
+                                onValueChange = { billNumber = it },
+                                label = { Text("Bill / Invoice No") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = batchName,
+                                onValueChange = { batchName = it },
+                                label = { Text("Batch Name") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Bill details inputs
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = billNumber,
-                        onValueChange = { billNumber = it },
-                        label = { Text("Bill Number") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = batchName,
-                        onValueChange = { batchName = it },
-                        label = { Text("Batch Name") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Page selection toolbar
+                // Page Selection Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Pages to Extract (${selectedPages.size}/$totalPages):",
+                        "Select Pages to Process:",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall
                     )
-                    Text(
-                        text = if (selectedPages.size == totalPages) "Deselect All" else "Select All",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.clickable {
+
+                    Row {
+                        IconButton(onClick = {
                             if (selectedPages.size == totalPages) {
                                 selectedPages.clear()
                             } else {
                                 selectedPages.clear()
-                                for (i in 0 until totalPages) selectedPages.add(i)
+                                selectedPages.addAll(0 until totalPages)
                             }
+                        }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Select All")
                         }
-                    )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Thumbnails Grid
+                // Thumbnail Grid
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Adaptive(minSize = 130.dp),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(thumbnails.size) { pageIdx ->
-                        val isSelected = selectedPages.contains(pageIdx)
-                        Box(
+                    items(thumbnails.size) { index ->
+                        val isSelected = selectedPages.contains(index)
+                        Card(
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(190.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray,
+                                    width = if (isSelected) 3.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF1976D2) else Color.LightGray,
                                     shape = RoundedCornerShape(8.dp)
                                 )
                                 .clickable {
-                                    if (isSelected) selectedPages.remove(pageIdx)
-                                    else selectedPages.add(pageIdx)
+                                    if (isSelected) {
+                                        selectedPages.remove(index)
+                                    } else {
+                                        selectedPages.add(index)
+                                    }
                                 }
                         ) {
-                            Image(
-                                bitmap = thumbnails[pageIdx].asImageBitmap(),
-                                contentDescription = "Page ${pageIdx + 1}",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(130.dp),
-                                contentScale = ContentScale.Crop
-                            )
-
-                            // Page number badge
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    "P.${pageIdx + 1}",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                Image(
+                                    bitmap = thumbnails[index].asImageBitmap(),
+                                    contentDescription = "Page ${index + 1}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
                                 )
-                            }
 
-                            // Selection Checkbox Badge
-                            if (isSelected) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                    contentAlignment = Alignment.Center
+                                        .padding(6.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = { checked ->
+                                            if (checked) selectedPages.add(index) else selectedPages.remove(index)
+                                        }
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .background(Color.Black.copy(alpha = 0.7f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Page ${index + 1}",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -380,15 +473,14 @@ fun PdfImportScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Progress Indicator when OCR is running
+                // Progress Indicator when AI OCR is running
                 AnimatedVisibility(visible = isProcessing) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(vertical = 8.dp)
                     ) {
                         LinearProgressIndicator(
                             progress = { processingProgress },
@@ -477,7 +569,10 @@ fun PdfImportScreen(
                                 isProcessing = false
                                 Toast.makeText(
                                     context,
-                                    "Extracted ${extractedRecords.size} barcode numbers!",
+                                    if (extractedRecords.isNotEmpty())
+                                        "Extracted ${extractedRecords.size} barcode numbers!"
+                                    else
+                                        "Batch created. You can add or verify numbers.",
                                     Toast.LENGTH_SHORT
                                 ).show()
 

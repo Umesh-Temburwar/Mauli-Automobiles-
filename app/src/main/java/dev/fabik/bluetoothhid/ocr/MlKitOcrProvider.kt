@@ -23,8 +23,8 @@ class MlKitOcrProvider : BarcodeOcrProvider {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
-    // Pattern to identify candidate barcode numeric strings (6 to 20 characters)
-    private val barcodeCandidatePattern = Pattern.compile("[0-9A-Za-z\\-]{6,20}")
+    // Pattern to identify candidate barcode numeric strings or part numbers (4 to 25 characters)
+    private val candidatePattern = Pattern.compile("[0-9A-Za-z\\-]{4,25}")
 
     override suspend fun extractBarcodesFromPage(
         pageBitmap: Bitmap,
@@ -40,40 +40,58 @@ class MlKitOcrProvider : BarcodeOcrProvider {
         }
 
         val results = mutableListOf<ExtractedBarcode>()
+        val seenCleaned = mutableSetOf<String>()
+
+        fun processCandidate(raw: String, baseConfidence: Float) {
+            val trimmed = raw.trim()
+            if (trimmed.length in 4..25 && candidatePattern.matcher(trimmed).find()) {
+                val cleaned = cleanHandwrittenBarcode(trimmed)
+                if (cleaned.isNotBlank() && !seenCleaned.contains(cleaned)) {
+                    seenCleaned.add(cleaned)
+                    val confidence = calculateConfidence(baseConfidence, trimmed, cleaned)
+                    val isPotential = cleaned.length in 6..18
+                    val warning = when {
+                        !cleaned.all { it.isDigit() || it == '-' } -> "Contains non-numeric characters"
+                        cleaned.length < 6 -> "Short part code (< 6 chars)"
+                        trimmed != cleaned -> "Handwriting corrected"
+                        else -> null
+                    }
+
+                    results.add(
+                        ExtractedBarcode(
+                            originalValue = trimmed,
+                            cleanedValue = cleaned,
+                            confidence = confidence,
+                            pageNumber = pageNumber,
+                            isPotentialBarcode = isPotential,
+                            warning = warning
+                        )
+                    )
+                }
+            }
+        }
 
         for (block in visionText.textBlocks) {
             for (line in block.lines) {
                 val lineText = line.text.trim()
+                val lineConfidence = line.confidence ?: 0.88f
 
-                // Split line by spaces, commas, slashes commonly used in bills
-                val tokens = lineText.split(Regex("[\\s,/;|]+"))
+                // Strategy 1: Check entire line without spaces (e.g. "8901 2345 6789" -> "890123456789")
+                val noSpace = lineText.replace(" ", "")
+                if (noSpace.length in 6..20 && noSpace.any { it.isDigit() }) {
+                    processCandidate(noSpace, lineConfidence)
+                }
 
-                for (rawToken in tokens) {
-                    val token = rawToken.trim()
-                    if (token.length in 6..20 && barcodeCandidatePattern.matcher(token).find()) {
-                        val cleaned = cleanHandwrittenBarcode(token)
-                        if (cleaned.isNotBlank()) {
-                            val confidence = calculateConfidence(line.confidence ?: 0.85f, token, cleaned)
-                            val isPotential = cleaned.length in 8..16 && cleaned.all { it.isDigit() }
-                            val warning = when {
-                                !cleaned.all { it.isDigit() } -> "Contains non-numeric characters"
-                                cleaned.length < 8 -> "Short barcode length (< 8 digits)"
-                                token != cleaned -> "Auto-corrected handwriting characters"
-                                else -> null
-                            }
+                // Strategy 2: Check consecutive numeric blocks in the line
+                val matcher = Pattern.compile("\\b[0-9A-Za-z\\-]{4,25}\\b").matcher(lineText)
+                while (matcher.find()) {
+                    processCandidate(matcher.group(), lineConfidence)
+                }
 
-                            results.add(
-                                ExtractedBarcode(
-                                    originalValue = token,
-                                    cleanedValue = cleaned,
-                                    confidence = confidence,
-                                    pageNumber = pageNumber,
-                                    isPotentialBarcode = isPotential,
-                                    warning = warning
-                                )
-                            )
-                        }
-                    }
+                // Strategy 3: Split line by common delimiters (tabs, commas, slashes, pipes)
+                val tokens = lineText.split(Regex("[\\t,/;|]+"))
+                for (token in tokens) {
+                    processCandidate(token, lineConfidence)
                 }
             }
         }
@@ -97,9 +115,8 @@ class MlKitOcrProvider : BarcodeOcrProvider {
         val canvas = Canvas(output)
 
         val cm = ColorMatrix().apply {
-            // High contrast grayscale
             setSaturation(0.0f)
-            val contrast = 1.6f
+            val contrast = 1.65f
             val translate = (-0.5f * contrast + 0.5f) * 255f
             val contrastMatrix = floatArrayOf(
                 contrast, 0f, 0f, 0f, translate,
@@ -122,6 +139,7 @@ class MlKitOcrProvider : BarcodeOcrProvider {
     /**
      * Cleans common handwritten barcode character confusions (e.g. O -> 0, I/l -> 1).
      * Preserves exact leading zeros like "00123...".
+     * Preserves hyphens for Hero/Honda part numbers (e.g. 17211-KUD-900).
      */
     private fun cleanHandwrittenBarcode(raw: String): String {
         val sb = StringBuilder()
@@ -138,15 +156,16 @@ class MlKitOcrProvider : BarcodeOcrProvider {
                     'S', 's' -> { sb.append('5'); digitCount++ }
                     'Z', 'z' -> { sb.append('2'); digitCount++ }
                     'B' -> { sb.append('8'); digitCount++ }
-                    '-' -> sb.append('-') // Preserve dashes in part numbers if present
+                    '-' -> sb.append('-') // Preserve dashes in Honda/Hero part numbers
                     else -> sb.append(c)
                 }
             }
         }
 
         val cleaned = sb.toString().trim()
-        // If more than 75% of characters are digits, return cleaned string
-        return if (cleaned.length >= 6 && digitCount.toFloat() / cleaned.length >= 0.70f) {
+        // If more than 60% of characters are digits or part numbers, accept it
+        val validChars = cleaned.count { it.isDigit() || it == '-' }
+        return if (cleaned.length >= 4 && validChars.toFloat() / cleaned.length >= 0.60f) {
             cleaned
         } else {
             ""
@@ -156,8 +175,8 @@ class MlKitOcrProvider : BarcodeOcrProvider {
     private fun calculateConfidence(baseConfidence: Float, raw: String, cleaned: String): Float {
         var conf = baseConfidence
         if (raw != cleaned) conf *= 0.90f
-        if (!cleaned.all { it.isDigit() }) conf *= 0.85f
-        if (cleaned.length < 8) conf *= 0.80f
+        if (!cleaned.all { it.isDigit() || it == '-' }) conf *= 0.85f
+        if (cleaned.length < 6) conf *= 0.80f
         return conf.coerceIn(0.1f, 1.0f)
     }
 }

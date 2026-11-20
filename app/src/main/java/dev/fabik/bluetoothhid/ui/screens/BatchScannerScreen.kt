@@ -9,10 +9,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.widget.Toast
 import androidx.camera.core.CameraControl
-import androidx.camera.core.CameraInfo
-import androidx.camera.core.ImageCapture
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,23 +23,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BluetoothConnected
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -90,20 +91,27 @@ fun BatchScannerScreen(
         ?: remember { mutableStateOf(null) }
 
     val db = remember { MauliDatabase.getInstance(context) }
+    var currentBatchId by remember { mutableStateOf(batchId) }
     var batch by remember { mutableStateOf<BillBatch?>(null) }
+    val allBatches = remember { mutableStateListOf<BillBatch>() }
+    var showBatchDropdown by remember { mutableStateOf(false) }
+
     val barcodes = remember { mutableStateListOf<BarcodeRecord>() }
 
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var isFlashOn by remember { mutableStateOf(false) }
     var autoSendToTally by remember { mutableStateOf(true) }
+    // Suffix: 0 = Enter (Tally default!), 1 = Tab, 2 = None
+    var suffixIndex by remember { mutableIntStateOf(0) }
 
+    var manualCodeInput by remember { mutableStateOf("") }
     var lastScannedBarcode by remember { mutableStateOf<String?>(null) }
     var lastScanStatusMessage by remember { mutableStateOf<String?>(null) }
     var lastScanIsDuplicate by remember { mutableStateOf(false) }
+    var lastScanTime by remember { mutableStateOf<Long?>(null) }
 
     val scannedSet = remember { mutableSetOf<String>() }
 
-    // Vibrator & Tone generator for audio feedback
     val toneGenerator = remember {
         try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) } catch (e: Exception) { null }
     }
@@ -136,216 +144,322 @@ fun BatchScannerScreen(
         }
     }
 
-    fun reloadBatch() {
+    fun reloadBatch(targetId: Long = currentBatchId) {
         scope.launch {
-            val loadedBatch = if (batchId > 0) db.getBatchById(batchId) else db.getAllBatches().firstOrNull()
+            val list = db.getAllBatches()
+            allBatches.clear()
+            allBatches.addAll(list)
+
+            val loadedBatch = if (targetId > 0) db.getBatchById(targetId) else list.firstOrNull()
             batch = loadedBatch
-            val activeId = loadedBatch?.id ?: batchId
-            val records = db.getBarcodesForBatch(activeId)
-            barcodes.clear()
-            barcodes.addAll(records)
-            scannedSet.clear()
-            records.filter { it.scanStatus == "SCANNED" }.forEach { scannedSet.add(it.correctedValue) }
+            val activeId = loadedBatch?.id ?: targetId
+            currentBatchId = activeId
+
+            if (activeId > 0) {
+                val records = db.getBarcodesForBatch(activeId)
+                barcodes.clear()
+                barcodes.addAll(records)
+                scannedSet.clear()
+                records.filter { it.scanStatus == "SCANNED" }.forEach { scannedSet.add(it.correctedValue) }
+            } else {
+                barcodes.clear()
+                scannedSet.clear()
+            }
         }
     }
 
     LaunchedEffect(batchId) {
-        reloadBatch()
+        reloadBatch(batchId)
+    }
+
+    fun transmitBarcode(code: String) {
+        val appendKey = when (suffixIndex) {
+            0 -> ExtraKeys.ENTER // Default for Tally!
+            1 -> ExtraKeys.TAB
+            else -> ExtraKeys.NONE
+        }
+
+        val isDuplicate = scannedSet.contains(code)
+        lastScannedBarcode = code
+        lastScanIsDuplicate = isDuplicate
+
+        playFeedback(isDuplicate)
+
+        scope.launch {
+            val activeId = batch?.id ?: currentBatchId
+            if (activeId > 0) {
+                db.markBarcodeScanned(activeId, code)
+            }
+            scannedSet.add(code)
+
+            // Save to scan history
+            db.insertScanHistory(
+                ScanHistoryRecord(
+                    barcodeRecordId = 0,
+                    scannedValue = code,
+                    transmissionStatus = if (currentDevice != null && autoSendToTally) "SENT" else "SCANNED"
+                )
+            )
+
+            // Send via Bluetooth HID to Windows Tally
+            if (currentDevice != null && autoSendToTally) {
+                val sender = controller?.keyboardSender
+                if (sender != null) {
+                    sender.sendProcessedString(
+                        processedString = code,
+                        sendDelay = 40L,
+                        appendKey = appendKey,
+                        locale = "US"
+                    )
+                    lastScanStatusMessage = "Sent to Tally with Enter: $code"
+                } else {
+                    lastScanStatusMessage = "Bluetooth sender not ready"
+                }
+            } else {
+                lastScanStatusMessage = if (isDuplicate) "Duplicate: $code" else "Recorded: $code"
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
         RequiresCameraPermission {
             Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                batch?.billNumber ?: "Batch Scanner",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                "Scanned: ${scannedSet.size} / ${barcodes.size}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    actions = {
-                        // Flash toggle
-                        IconButton(onClick = {
-                            isFlashOn = !isFlashOn
-                            cameraControl?.enableTorch(isFlashOn)
-                        }) {
-                            Icon(
-                                if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                contentDescription = "Flash",
-                                tint = if (isFlashOn) Color.Yellow else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                    )
-                )
-            }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                // 1. Live Camera Preview
-                CameraPreviewContent(
-                    onCameraReady = { control, _, _ ->
-                        cameraControl = control
-                    },
-                    onBarcodeDetected = { result: BarcodeResult? ->
-                        val code = result?.text?.trim()
-                        if (code.isNullOrBlank()) return@CameraPreviewContent
-
-                        // Prevent rapid multi-detection within 1.5 seconds
-                        if (lastScannedBarcode == code && System.currentTimeMillis() - (lastScanTime ?: 0L) < 1500L) {
-                            return@CameraPreviewContent
-                        }
-                        lastScanTime = System.currentTimeMillis()
-
-                        val isDuplicate = scannedSet.contains(code)
-                        lastScannedBarcode = code
-                        lastScanIsDuplicate = isDuplicate
-
-                        playFeedback(isDuplicate)
-
-                        scope.launch {
-                            val activeId = batch?.id ?: batchId
-                            val updated = db.markBarcodeScanned(activeId, code)
-                            scannedSet.add(code)
-
-                            // Save to scan history
-                            db.insertScanHistory(
-                                ScanHistoryRecord(
-                                    barcodeRecordId = 0,
-                                    scannedValue = code,
-                                    transmissionStatus = if (currentDevice != null && autoSendToTally) "SENT" else "SCANNED"
-                                )
-                            )
-
-                            // Send via Bluetooth HID to Windows Tally
-                            if (currentDevice != null && autoSendToTally) {
-                                val sender = controller?.keyboardSender
-                                if (sender != null) {
-                                    sender.sendProcessedString(
-                                        processedString = code,
-                                        sendDelay = 40L,
-                                        appendKey = ExtraKeys.NONE,
-                                        locale = "US"
-                                    )
-                                    lastScanStatusMessage = "Typed into Tally: $code"
-                                } else {
-                                    lastScanStatusMessage = "HID Keyboard not ready"
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Column(
+                                modifier = Modifier.clickable {
+                                    if (allBatches.size > 1) showBatchDropdown = true
                                 }
-                            } else {
-                                lastScanStatusMessage = if (isDuplicate) "Duplicate Scan: $code" else "Recorded: $code"
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        batch?.billNumber ?: "Batch Scanner",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    if (allBatches.size > 1) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.Default.UnfoldMore, contentDescription = "Switch", modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                Text(
+                                    "Scanned: ${scannedSet.size} / ${barcodes.size} • Suffix: ${if (suffixIndex == 0) "Enter" else if (suffixIndex == 1) "Tab" else "None"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                DropdownMenu(
+                                    expanded = showBatchDropdown,
+                                    onDismissRequest = { showBatchDropdown = false }
+                                ) {
+                                    allBatches.forEach { b ->
+                                        DropdownMenuItem(
+                                            text = { Text("${b.billNumber} (${b.batchName})") },
+                                            onClick = {
+                                                showBatchDropdown = false
+                                                currentBatchId = b.id
+                                                reloadBatch(b.id)
+                                            }
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
-                )
-
-                // 2. Top Batch Progress Overlay
-                ElevatedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
-                        .align(Alignment.TopCenter),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = Color.Black.copy(alpha = 0.78f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        val progress = if (barcodes.isNotEmpty()) scannedSet.size.toFloat() / barcodes.size else 0f
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Progress: ${scannedSet.size} / ${barcodes.size} (${(progress * 100).toInt()}%)",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Auto-Send:", color = Color.LightGray, fontSize = 11.sp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Switch(
-                                    checked = autoSendToTally,
-                                    onCheckedChange = { autoSendToTally = it },
-                                    modifier = Modifier.size(36.dp)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onNavigateBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        actions = {
+                            // Flash toggle
+                            IconButton(onClick = {
+                                isFlashOn = !isFlashOn
+                                cameraControl?.enableTorch(isFlashOn)
+                            }) {
+                                Icon(
+                                    if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                    contentDescription = "Flash",
+                                    tint = if (isFlashOn) Color.Yellow else MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp),
-                            color = Color(0xFF4CAF50),
-                            trackColor = Color.DarkGray
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
                         )
-                    }
+                    )
                 }
-
-                // 3. Bottom Last Scanned Result Banner
-                AnimatedVisibility(
-                    visible = lastScannedBarcode != null,
+            ) { padding ->
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
+                        .fillMaxSize()
+                        .padding(padding)
                 ) {
+                    // 1. Live Camera Preview
+                    CameraPreviewContent(
+                        onCameraReady = { control, _, _ ->
+                            cameraControl = control
+                        },
+                        onBarcodeDetected = { result: BarcodeResult? ->
+                            val code = result?.text?.trim()
+                            if (code.isNullOrBlank()) return@CameraPreviewContent
+
+                            // Prevent rapid multi-detection within 1.5 seconds
+                            if (lastScannedBarcode == code && System.currentTimeMillis() - (lastScanTime ?: 0L) < 1500L) {
+                                return@CameraPreviewContent
+                            }
+                            lastScanTime = System.currentTimeMillis()
+
+                            transmitBarcode(code)
+                        }
+                    )
+
+                    // 2. Top Batch Progress Overlay
                     ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                            .align(Alignment.TopCenter),
+                        shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.elevatedCardColors(
-                            containerColor = if (lastScanIsDuplicate) Color(0xFFD32F2F) else Color(0xFF1B5E20)
+                            containerColor = Color.Black.copy(alpha = 0.82f)
                         )
                     ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            val progress = if (barcodes.isNotEmpty()) scannedSet.size.toFloat() / barcodes.size else 0f
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Progress: ${scannedSet.size} / ${barcodes.size} (${(progress * 100).toInt()}%)",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Auto-Send:", color = Color.LightGray, fontSize = 11.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Switch(
+                                        checked = autoSendToTally,
+                                        onCheckedChange = { autoSendToTally = it },
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp),
+                                color = Color(0xFF4CAF50),
+                                trackColor = Color.DarkGray
+                            )
+
+                            // Suffix Selector row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Key Suffix:", color = Color.LightGray, fontSize = 11.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf("Enter", "Tab", "None").forEachIndexed { idx, label ->
+                                        val isSel = suffixIndex == idx
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isSel) Color(0xFF1976D2) else Color.DarkGray)
+                                                .clickable { suffixIndex = idx }
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Bottom Last Scanned Result & Manual Input
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AnimatedVisibility(visible = lastScannedBarcode != null) {
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = if (lastScanIsDuplicate) Color(0xFFD32F2F) else Color(0xFF1B5E20)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        if (lastScanIsDuplicate) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = lastScannedBarcode ?: "",
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = lastScanStatusMessage ?: "",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.85f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Manual Barcode Input Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
+                                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                                .padding(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                if (lastScanIsDuplicate) Icons.Default.Warning else Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
+                            OutlinedTextField(
+                                value = manualCodeInput,
+                                onValueChange = { manualCodeInput = it },
+                                placeholder = { Text("Manual code...", color = Color.Gray, fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = lastScannedBarcode ?: "",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = lastScanStatusMessage ?: "Scanned successfully",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha = 0.85f)
-                                )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(
+                                onClick = {
+                                    if (manualCodeInput.isNotBlank()) {
+                                        transmitBarcode(manualCodeInput.trim())
+                                        manualCodeInput = ""
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color(0xFF4CAF50))
                             }
                         }
                     }
@@ -354,6 +468,3 @@ fun BatchScannerScreen(
         }
     }
 }
-}
-
-private var lastScanTime: Long? = null

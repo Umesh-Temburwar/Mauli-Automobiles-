@@ -1,6 +1,7 @@
 package dev.fabik.bluetoothhid.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,14 +25,20 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,6 +49,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +72,9 @@ import dev.fabik.bluetoothhid.data.BarcodeRecord
 import dev.fabik.bluetoothhid.data.BillBatch
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,44 +88,93 @@ fun VerificationScreen(
     val scope = rememberCoroutineScope()
     val db = remember { MauliDatabase.getInstance(context) }
 
+    var currentBatchId by remember { mutableStateOf(batchId) }
     var batch by remember { mutableStateOf<BillBatch?>(null) }
+    val allBatches = remember { mutableStateListOf<BillBatch>() }
     val barcodes = remember { mutableStateListOf<BarcodeRecord>() }
     var duplicateValues by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showBatchDropdown by remember { mutableStateOf(false) }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var newBarcodeValue by remember { mutableStateOf("") }
 
-    fun refreshData() {
+    var editingRecord by remember { mutableStateOf<BarcodeRecord?>(null) }
+    var editedValue by remember { mutableStateOf("") }
+
+    fun refreshData(targetId: Long = currentBatchId) {
         scope.launch {
-            val loadedBatch = if (batchId > 0) db.getBatchById(batchId) else db.getAllBatches().firstOrNull()
+            val batchList = db.getAllBatches()
+            allBatches.clear()
+            allBatches.addAll(batchList)
+
+            val loadedBatch = if (targetId > 0) {
+                db.getBatchById(targetId)
+            } else {
+                batchList.firstOrNull()
+            }
+
             batch = loadedBatch
-            val activeBatchId = loadedBatch?.id ?: batchId
-            val records = db.getBarcodesForBatch(activeBatchId)
-            barcodes.clear()
-            barcodes.addAll(records)
-            duplicateValues = db.findDuplicatesInBatch(activeBatchId)
+            val activeBatchId = loadedBatch?.id ?: 0L
+            currentBatchId = activeBatchId
+
+            if (activeBatchId > 0) {
+                val records = db.getBarcodesForBatch(activeBatchId)
+                barcodes.clear()
+                barcodes.addAll(records)
+                duplicateValues = db.findDuplicatesInBatch(activeBatchId)
+            } else {
+                barcodes.clear()
+                duplicateValues = emptySet()
+            }
         }
     }
 
     LaunchedEffect(batchId) {
-        refreshData()
+        refreshData(batchId)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier.clickable {
+                            if (allBatches.size > 1) showBatchDropdown = true
+                        }
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                batch?.billNumber ?: "Verify Barcodes",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            if (allBatches.size > 1) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.UnfoldMore, contentDescription = "Switch Batch", modifier = Modifier.size(18.dp))
+                            }
+                        }
                         Text(
-                            batch?.billNumber ?: "Verify Barcodes",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "${barcodes.size} Numbers Extracted",
+                            "${barcodes.size} Numbers • ${batch?.batchName ?: "Tap to switch batch"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        // Batch Switch Dropdown
+                        DropdownMenu(
+                            expanded = showBatchDropdown,
+                            onDismissRequest = { showBatchDropdown = false }
+                        ) {
+                            allBatches.forEach { b ->
+                                DropdownMenuItem(
+                                    text = { Text("${b.billNumber} (${b.batchName})") },
+                                    onClick = {
+                                        showBatchDropdown = false
+                                        currentBatchId = b.id
+                                        refreshData(b.id)
+                                    }
+                                )
+                            }
+                        }
                     }
                 },
                 navigationIcon = {
@@ -123,339 +183,331 @@ fun VerificationScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
+                    // Quick Approve All Button
+                    if (barcodes.isNotEmpty()) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                barcodes.forEach { rec ->
+                                    if (rec.verificationStatus != "VERIFIED") {
+                                        db.updateBarcode(rec.copy(verificationStatus = "VERIFIED"))
+                                    }
+                                }
+                                Toast.makeText(context, "All barcodes approved!", Toast.LENGTH_SHORT).show()
+                                refreshData()
+                            }
+                        }) {
+                            Icon(Icons.Default.DoneAll, contentDescription = "Approve All", tint = Color(0xFF2E7D32))
+                        }
+                    }
+
+                    // Add Manual Barcode
+                    IconButton(onClick = {
+                        newBarcodeValue = ""
+                        showAddDialog = true
+                    }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Barcode")
                     }
                 }
             )
         },
         bottomBar = {
-            // Action Buttons
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            if (barcodes.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shadowElevation = 8.dp
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            val activeBatchId = batch?.id ?: batchId
-                            if (barcodes.isNotEmpty()) {
-                                onNavigateToDirectSend(activeBatchId)
-                            } else {
-                                Toast.makeText(context, "No barcodes to send", Toast.LENGTH_SHORT).show()
-                            }
-                        },
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(8.dp)
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Direct to Tally", fontWeight = FontWeight.Bold)
-                    }
+                        OutlinedButton(
+                            onClick = {
+                                onNavigateToDirectSend(currentBatchId)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Direct to Tally", fontWeight = FontWeight.Bold)
+                        }
 
-                    Button(
-                        onClick = {
-                            val activeBatchId = batch?.id ?: batchId
-                            if (barcodes.isNotEmpty()) {
-                                onNavigateToGeneratePdf(activeBatchId)
-                            } else {
-                                Toast.makeText(context, "No barcodes to generate", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Generate PDF", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                onNavigateToGeneratePdf(currentBatchId)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Generate PDF", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-        ) {
-            // Summary Chips
-            val verifiedCount = barcodes.count { it.verificationStatus == "VERIFIED" }
-            val reviewCount = barcodes.count { it.verificationStatus == "NEEDS_REVIEW" }
-
-            Row(
+        if (barcodes.isEmpty()) {
+            // Empty state
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
             ) {
-                StatusBadge(text = "$verifiedCount Verified", color = Color(0xFF2E7D32))
-                if (reviewCount > 0) {
-                    StatusBadge(text = "$reviewCount Review", color = Color(0xFFE65100))
-                }
-                if (duplicateValues.isNotEmpty()) {
-                    StatusBadge(text = "${duplicateValues.size} Duplicates", color = Color(0xFFD32F2F))
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                if (reviewCount > 0) {
-                    Text(
-                        text = "Approve All",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.clickable {
-                            scope.launch {
-                                for (b in barcodes) {
-                                    if (b.verificationStatus != "VERIFIED") {
-                                        db.updateBarcode(b.copy(verificationStatus = "VERIFIED"))
-                                    }
-                                }
-                                refreshData()
-                                Toast.makeText(context, "All barcodes approved!", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        Icons.Default.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = Color.Gray
                     )
+                    Text(
+                        "No Barcode Numbers in this Batch",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        "कॅमेऱ्याने बिलाचा फोटो काढा किंवा नवीन नंबर जोडा",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            newBarcodeValue = ""
+                            showAddDialog = true
+                        },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Barcode Manually (नंबर टाका)")
+                    }
                 }
             }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
 
-            // List of Extracted Barcodes
-            if (barcodes.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 60.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "No barcode numbers found in this batch",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                items(barcodes, key = { it.id }) { record ->
+                    val isDuplicate = duplicateValues.contains(record.correctedValue)
+                    val isVerified = record.verificationStatus == "VERIFIED"
+
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = if (isDuplicate) Color(0xFFFFEBEE) else Color.White
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(onClick = { showAddDialog = true }) {
-                            Text("Add Barcode Manually")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = record.correctedValue,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color.Black
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Status Badge
+                                    val (badgeBg, badgeText, badgeColor) = when {
+                                        isDuplicate -> Triple(Color(0xFFFFCDD2), "Duplicate", Color(0xFFC62828))
+                                        isVerified -> Triple(Color(0xFFC8E6C9), "Verified", Color(0xFF2E7D32))
+                                        else -> Triple(Color(0xFFFFE0B2), "Needs Review", Color(0xFFE65100))
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(badgeBg)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            badgeText,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = badgeColor
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Text(
+                                        "Page ${record.pageNumber}",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+
+                            // Action Buttons
+                            Row {
+                                IconButton(onClick = {
+                                    editingRecord = record
+                                    editedValue = record.correctedValue
+                                }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.DarkGray)
+                                }
+
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        db.deleteBarcode(record.id)
+                                        refreshData()
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F))
+                                }
+                            }
                         }
                     }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(barcodes, key = { _, item -> item.id }) { index, item ->
-                        val isDuplicate = duplicateValues.contains(item.correctedValue)
-                        val needsReview = item.verificationStatus == "NEEDS_REVIEW"
 
-                        BarcodeVerificationCard(
-                            index = index + 1,
-                            record = item,
-                            isDuplicate = isDuplicate,
-                            onValueChanged = { newVal ->
-                                scope.launch {
-                                    val updated = item.copy(
-                                        correctedValue = newVal,
-                                        verificationStatus = "VERIFIED"
-                                    )
-                                    db.updateBarcode(updated)
-                                    refreshData()
-                                }
-                            },
-                            onDelete = {
-                                scope.launch {
-                                    db.deleteBarcode(item.id)
-                                    refreshData()
-                                }
-                            }
-                        )
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                item {
+                    Spacer(modifier = Modifier.height(70.dp))
                 }
             }
         }
     }
 
-    // Add Missing Barcode Dialog
+    // Add Manual Barcode Dialog
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("Add Missing Barcode (नंबर जोडा)", fontWeight = FontWeight.Bold) },
+            title = { Text("Add Barcode Number") },
             text = {
                 Column {
-                    Text(
-                        "Enter the product barcode number written on the bill:",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Enter barcode number preserving all leading zeros:", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = newBarcodeValue,
                         onValueChange = { newBarcodeValue = it },
-                        label = { Text("Barcode Number (Exact String)") },
+                        placeholder = { Text("e.g. 8901234567890 or 17211-KUD-900") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val trimmed = newBarcodeValue.trim()
-                        if (trimmed.isNotBlank()) {
-                            scope.launch {
-                                val activeBatchId = batch?.id ?: batchId
-                                db.insertBarcodeRecords(
-                                    listOf(
-                                        BarcodeRecord(
-                                            batchId = activeBatchId,
-                                            originalOcrValue = trimmed,
-                                            correctedValue = trimmed,
-                                            pageNumber = 1,
-                                            confidence = 1.0f,
-                                            verificationStatus = "VERIFIED",
-                                            barcodeFormat = "CODE_128",
-                                            scanStatus = "PENDING"
-                                        )
+                Button(onClick = {
+                    if (newBarcodeValue.isNotBlank()) {
+                        scope.launch {
+                            var targetBatchId = currentBatchId
+                            // If no batch exists, create one
+                            if (targetBatchId == 0L || batch == null) {
+                                val newId = db.insertBatch(
+                                    BillBatch(
+                                        batchName = "Manual Batch",
+                                        billNumber = "Bill #${SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())}",
+                                        pdfDocumentId = 0L
                                     )
                                 )
-                                newBarcodeValue = ""
-                                showAddDialog = false
-                                refreshData()
+                                targetBatchId = newId
+                                currentBatchId = newId
                             }
+
+                            db.insertBarcodeRecords(
+                                listOf(
+                                    BarcodeRecord(
+                                        batchId = targetBatchId,
+                                        originalOcrValue = newBarcodeValue.trim(),
+                                        correctedValue = newBarcodeValue.trim(),
+                                        pageNumber = 1,
+                                        confidence = 1.0f,
+                                        verificationStatus = "VERIFIED",
+                                        barcodeFormat = "CODE_128",
+                                        scanStatus = "PENDING"
+                                    )
+                                )
+                            )
+                            showAddDialog = false
+                            refreshData(targetBatchId)
                         }
                     }
-                ) {
+                }) {
                     Text("Add")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showAddDialog = false }) {
+                TextButton(onClick = { showAddDialog = false }) {
                     Text("Cancel")
                 }
             }
         )
     }
-}
 
-@Composable
-fun StatusBadge(text: String, color: Color) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = text,
-            color = color,
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp
-        )
-    }
-}
-
-@Composable
-fun BarcodeVerificationCard(
-    index: Int,
-    record: BarcodeRecord,
-    isDuplicate: Boolean,
-    onValueChanged: (String) -> Unit,
-    onDelete: () -> Unit
-) {
-    var textValue by remember(record.correctedValue) { mutableStateOf(record.correctedValue) }
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = when {
-                isDuplicate -> Color(0xFFFFEBEE)
-                record.verificationStatus == "NEEDS_REVIEW" -> Color(0xFFFFF8E1)
-                else -> MaterialTheme.colorScheme.surface
-            }
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Index & Page badge
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(42.dp)
-            ) {
-                Text(
-                    text = "#$index",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = "P.${record.pageNumber}",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Editable Text Field (Preserves exact string)
-            OutlinedTextField(
-                value = textValue,
-                onValueChange = {
-                    textValue = it
-                    onValueChanged(it)
-                },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                ),
-                trailingIcon = {
-                    if (isDuplicate) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = "Duplicate",
-                            tint = Color(0xFFD32F2F),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    } else if (record.verificationStatus == "VERIFIED") {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Verified",
-                            tint = Color(0xFF2E7D32),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+    // Edit Barcode Dialog
+    editingRecord?.let { record ->
+        AlertDialog(
+            onDismissRequest = { editingRecord = null },
+            title = { Text("Edit Barcode") },
+            text = {
+                Column {
+                    Text("Correct the extracted number:", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editedValue,
+                        onValueChange = { editedValue = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-            )
-
-            // Delete action
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(20.dp)
-                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editedValue.isNotBlank()) {
+                        scope.launch {
+                            db.updateBarcode(
+                                record.copy(
+                                    correctedValue = editedValue.trim(),
+                                    verificationStatus = "VERIFIED"
+                                )
+                            )
+                            editingRecord = null
+                            refreshData()
+                        }
+                    }
+                }) {
+                    Text("Save & Verify")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingRecord = null }) {
+                    Text("Cancel")
+                }
             }
-        }
+        )
     }
 }

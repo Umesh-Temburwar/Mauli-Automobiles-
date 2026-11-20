@@ -237,6 +237,9 @@ class MauliDatabase private constructor(context: Context) :
 
     /* -------------------- BARCODE RECORDS -------------------- */
 
+    suspend fun insertBarcodeRecord(record: BarcodeRecord): Long =
+        insertBarcodeRecords(listOf(record)).firstOrNull() ?: -1L
+
     suspend fun insertBarcodeRecords(records: List<BarcodeRecord>): List<Long> = withContext(Dispatchers.IO) {
         val ids = mutableListOf<Long>()
         val db = writableDatabase
