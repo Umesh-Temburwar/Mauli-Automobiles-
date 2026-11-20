@@ -1,6 +1,7 @@
 package dev.fabik.bluetoothhid.ui.screens
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.Uri
@@ -34,18 +35,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ArrowBackIos
-import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.UploadFile
@@ -108,10 +112,10 @@ import dev.fabik.bluetoothhid.ui.CameraPreviewContent
 import dev.fabik.bluetoothhid.ui.RequiresCameraPermission
 import dev.fabik.bluetoothhid.ui.model.BarcodeResult
 import dev.fabik.bluetoothhid.utils.ExtraKeys
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -137,7 +141,7 @@ fun BatchScannerScreen(
 
     val barcodes = remember { mutableStateListOf<BarcodeRecord>() }
 
-    // Mode: 0 = On-Screen PDF 1-by-1 Barcode Reader (No 2nd phone required!), 1 = Camera Scanner
+    // Mode: 0 = Screen Scan 1-by-1 (No 2nd phone required!), 1 = Camera Scanner
     var selectedModeTab by remember { mutableIntStateOf(0) }
 
     // Screen Reader State
@@ -145,7 +149,8 @@ fun BatchScannerScreen(
     var isAutoSending by remember { mutableStateOf(false) }
     var autoSendDelayMs by remember { mutableStateOf(1500L) }
     var autoSendJob by remember { mutableStateOf<Job?>(null) }
-    var isImportingPdf by remember { mutableStateOf(false) }
+    var isProcessingBillPhoto by remember { mutableStateOf(false) }
+    var photoProcessingStatus by remember { mutableStateOf("") }
 
     // Camera Mode State
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
@@ -275,15 +280,117 @@ fun BatchScannerScreen(
         }
     }
 
-    // PDF Import Launcher for on-the-fly PDF loading inside scanner
+    // Process a captured bill photo into Barcodes immediately
+    fun processBillPhotoBitmap(bitmap: Bitmap) {
+        scope.launch {
+            try {
+                isProcessingBillPhoto = true
+                photoProcessingStatus = "AI reading handwritten bill photo..."
+                Toast.makeText(context, "Processing bill photo with AI...", Toast.LENGTH_SHORT).show()
+
+                // 1. Convert photo into standard A4 PDF document
+                val internalFile = PdfImporter.convertBitmapToInternalPdf(
+                    context,
+                    bitmap,
+                    "bill_photo_${System.currentTimeMillis()}"
+                )
+
+                val docId = db.insertPdfDocument(
+                    PdfDocumentRecord(
+                        filename = "Bill_Photo_${SimpleDateFormat("HHmmss", Locale.getDefault()).format(Date())}.pdf",
+                        importDate = System.currentTimeMillis(),
+                        totalPages = 1,
+                        processingStatus = "EXTRACTED",
+                        filePath = internalFile.absolutePath
+                    )
+                )
+
+                // 2. Run on-device OCR on the high-res bitmap
+                val ocrProvider = MlKitOcrProvider()
+                val pageResults = ocrProvider.extractBarcodesFromPage(bitmap, pageNumber = 1)
+
+                if (pageResults.isEmpty()) {
+                    Toast.makeText(context, "No handwritten barcode numbers found. Please take a closer photo.", Toast.LENGTH_LONG).show()
+                } else {
+                    val newBatchId = db.insertBatch(
+                        BillBatch(
+                            batchName = "Photo Bill ${SimpleDateFormat("dd MMM HH:mm", Locale.getDefault()).format(Date())}",
+                            billNumber = "Bill #${SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())}",
+                            pdfDocumentId = docId
+                        )
+                    )
+
+                    val records = pageResults.map { item ->
+                        BarcodeRecord(
+                            batchId = newBatchId,
+                            originalOcrValue = item.originalValue,
+                            correctedValue = item.cleanedValue,
+                            pageNumber = 1,
+                            confidence = item.confidence,
+                            verificationStatus = if (item.warning == null) "VERIFIED" else "NEEDS_REVIEW",
+                            barcodeFormat = "CODE_128",
+                            scanStatus = "PENDING"
+                        )
+                    }
+
+                    db.insertBarcodeRecords(records)
+                    currentBatchId = newBatchId
+                    currentScreenIndex = 0
+                    reloadBatch(newBatchId)
+                    selectedModeTab = 0 // Switch to Screen Scan mode immediately!
+                    Toast.makeText(context, "Found ${records.size} products! Tap 'NEXT PRODUCT' to enter in Tally.", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error processing bill: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isProcessingBillPhoto = false
+            }
+        }
+    }
+
+    // 1. Camera Capture Launcher (Take Photo of Handwritten Bill)
+    val billCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            processBillPhotoBitmap(bitmap)
+        }
+    }
+
+    // 2. Gallery Picker Launcher (In case bill is sent on WhatsApp)
+    val billGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    isProcessingBillPhoto = true
+                    photoProcessingStatus = "Loading photo from gallery..."
+                    val file = PdfImporter.copyOrConvertMediaToInternalPdf(context, uri)
+                    val ocrProvider = MlKitOcrProvider()
+                    val bmp = withContext(Dispatchers.IO) {
+                        PdfImporter.renderPageHighRes(file, 0, scale = 2.0f)
+                    }
+                    processBillPhotoBitmap(bmp)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "Error opening image: ${e.message}", Toast.LENGTH_LONG).show()
+                    isProcessingBillPhoto = false
+                }
+            }
+        }
+    }
+
+    // 3. PDF Document Picker Launcher
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             try {
-                isImportingPdf = true
-                Toast.makeText(context, "Reading barcodes from PDF...", Toast.LENGTH_SHORT).show()
+                isProcessingBillPhoto = true
+                photoProcessingStatus = "Reading PDF bill..."
                 val internalFile = PdfImporter.copyPdfToInternalStorage(context, uri)
                 val docId = db.insertPdfDocument(
                     PdfDocumentRecord(
@@ -299,7 +406,7 @@ fun BatchScannerScreen(
                 val totalP = PdfImporter.getPageCount(internalFile)
                 val newBatchId = db.insertBatch(
                     BillBatch(
-                        batchName = "PDF Scan ${SimpleDateFormat("dd-MM HH:mm", Locale.getDefault()).format(Date())}",
+                        batchName = "PDF Bill ${SimpleDateFormat("dd-MM HH:mm", Locale.getDefault()).format(Date())}",
                         billNumber = "Bill #${SimpleDateFormat("MMdd-HHmm", Locale.getDefault()).format(Date())}",
                         pdfDocumentId = docId
                     )
@@ -333,25 +440,28 @@ fun BatchScannerScreen(
                 }
 
                 currentBatchId = newBatchId
+                currentScreenIndex = 0
                 reloadBatch(newBatchId)
-                Toast.makeText(context, "Loaded ${records.size} barcodes from PDF!", Toast.LENGTH_SHORT).show()
+                selectedModeTab = 0
+                Toast.makeText(context, "Loaded ${records.size} products from PDF!", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(context, "Error reading PDF: ${e.message}", Toast.LENGTH_LONG).show()
             } finally {
-                isImportingPdf = false
+                isProcessingBillPhoto = false
             }
         }
     }
 
-    fun sendAndNext() {
+    // Sends the current product to Tally with Enter key and advances to Next Product!
+    fun sendAndNextProduct() {
         if (barcodes.isEmpty()) return
         val record = barcodes.getOrNull(currentScreenIndex) ?: return
         transmitBarcode(record.correctedValue)
         if (currentScreenIndex < barcodes.size - 1) {
             currentScreenIndex++
         } else {
-            Toast.makeText(context, "All barcodes sent to Tally!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "All products from this bill entered into Tally!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -416,6 +526,7 @@ fun BatchScannerScreen(
                                     onClick = {
                                         showBatchDropdown = false
                                         currentBatchId = b.id
+                                        currentScreenIndex = 0
                                         reloadBatch(b.id)
                                     }
                                 )
@@ -429,7 +540,11 @@ fun BatchScannerScreen(
                     }
                 },
                 actions = {
-                    // Quick import PDF button
+                    // Quick snap bill photo from top bar
+                    IconButton(onClick = { billCameraLauncher.launch(null) }) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "Snap Bill", tint = Color(0xFFE65100))
+                    }
+                    // Import PDF button
                     IconButton(onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) }) {
                         Icon(Icons.Default.UploadFile, contentDescription = "Import PDF", tint = Color(0xFF1976D2))
                     }
@@ -458,7 +573,7 @@ fun BatchScannerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Mode Tabs: On-Screen PDF Reader vs Camera Scanner
+            // Mode Tabs: On-Screen Barcode Reader vs Camera Scanner
             TabRow(selectedTabIndex = selectedModeTab) {
                 Tab(
                     selected = selectedModeTab == 0,
@@ -483,38 +598,68 @@ fun BatchScannerScreen(
             if (selectedModeTab == 0) {
                 /* ========================================================
                  * MODE 0: ON-SCREEN PDF 1-BY-1 BARCODE READER
-                 * (No 2nd phone required! Renders barcodes right on phone!)
+                 * (Renders barcodes right on phone, tap "NEXT PRODUCT" to enter in Tally!)
                  * ======================================================== */
-                if (isImportingPdf) {
+                if (isProcessingBillPhoto) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(color = Color(0xFFE65100))
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Reading barcodes from PDF...", fontWeight = FontWeight.Bold)
-                            Text("एक-एक बारकोड तयार होत आहेत...", color = Color.Gray, fontSize = 12.sp)
+                            Text(photoProcessingStatus, fontWeight = FontWeight.Bold)
+                            Text("हस्तलिखित बिलातून बारकोड तयार होत आहेत...", color = Color.Gray, fontSize = 12.sp)
                         }
                     }
                 } else if (barcodes.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("No Barcodes in this Batch", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color(0xFFE65100))
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text("No Bill Loaded Yet", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                "दुसऱ्या मोबाईलची गरज नाही! खालील बटनावर क्लिक करून PDF सिलेक्ट करा किंवा डॅशबोर्डवरून बिल तयार करा.",
+                                "हस्तलिखित बिलाचा फोटो काढा — आपोआप सर्व बारकोड तयार होतील आणि 'Next Product' दाबून Tally मध्ये १-by-१ एंटर करता येईल!",
                                 textAlign = TextAlign.Center,
                                 color = Color.Gray,
-                                fontSize = 12.sp
+                                fontSize = 13.sp
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // 1. Photo Capture Button
                             Button(
-                                onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                                onClick = { billCameraLauncher.launch(null) },
+                                modifier = Modifier.fillMaxWidth(0.9f).height(52.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
                             ) {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Import Bill PDF (PDF निवडा)")
+                                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("📸 Click Bill Photo (बिलाचा फोटो काढा)", fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 2. Gallery / WhatsApp Image
+                            OutlinedButton(
+                                onClick = { billGalleryLauncher.launch("image/*") },
+                                modifier = Modifier.fillMaxWidth(0.9f).height(48.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Image, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Pick Photo from Gallery / WhatsApp", fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 3. PDF File
+                            OutlinedButton(
+                                onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                                modifier = Modifier.fillMaxWidth(0.9f).height(48.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.UploadFile, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Select PDF Document", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -526,10 +671,10 @@ fun BatchScannerScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Top Progress & Suffix settings
+                        // Top Progress & Bill Actions
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -542,23 +687,22 @@ fun BatchScannerScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Item ${currentScreenIndex + 1} of ${barcodes.size} (${(progress * 100).toInt()}% Done)",
+                                        text = "Product ${currentScreenIndex + 1} of ${barcodes.size} (${(progress * 100).toInt()}% Done)",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        listOf("Enter", "Tab", "None").forEachIndexed { idx, label ->
-                                            val isSel = suffixIndex == idx
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSel) Color(0xFF1976D2) else Color.LightGray.copy(alpha = 0.5f))
-                                                    .clickable { suffixIndex = idx }
-                                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(label, color = if (isSel) Color.White else Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
+                                    // Snap New Bill Photo shortcut button
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFFE65100))
+                                            .clickable { billCameraLauncher.launch(null) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("New Bill Photo", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -574,7 +718,7 @@ fun BatchScannerScreen(
                         ElevatedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 4.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.elevatedCardColors(
                                 containerColor = if (isCurrentScanned) Color(0xFFF1F8E9) else MaterialTheme.colorScheme.surface
@@ -595,28 +739,29 @@ fun BatchScannerScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isCurrentScanned) Color(0xFF4CAF50) else Color.LightGray.copy(alpha = 0.4f))
+                                            .background(if (isCurrentScanned) Color(0xFF4CAF50) else Color(0xFFFF9800))
                                             .padding(horizontal = 10.dp, vertical = 3.dp)
                                     ) {
                                         Text(
-                                            if (isCurrentScanned) "✓ SENT TO TALLY" else "PENDING",
-                                            color = if (isCurrentScanned) Color.White else Color.Black,
+                                            if (isCurrentScanned) "✓ ENTERED IN TALLY" else "PENDING",
+                                            color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 11.sp
                                         )
                                     }
                                     Text(
-                                        "Page ${currentRecord.pageNumber}",
+                                        "Suffix: ${if (suffixIndex == 0) "Enter [Tally]" else if (suffixIndex == 1) "Tab" else "None"}",
                                         fontSize = 11.sp,
-                                        color = Color.Gray
+                                        color = Color.Gray,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
 
                                 // Rendered Code 128 Barcode Image
                                 val barcodeBitmap = remember(currentRecord.correctedValue) {
-                                    BarcodeGenerator.generateCode128Safe(currentRecord.correctedValue, width = 560, height = 140, showText = false)
+                                    BarcodeGenerator.generateCode128Safe(currentRecord.correctedValue, width = 560, height = 135, showText = false)
                                 }
 
                                 if (barcodeBitmap != null) {
@@ -625,9 +770,9 @@ fun BatchScannerScreen(
                                         contentDescription = "Barcode",
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(85.dp)
+                                            .height(80.dp)
                                             .background(Color.White)
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
                                     )
                                 } else {
                                     Box(
@@ -655,7 +800,7 @@ fun BatchScannerScreen(
 
                                 if (currentDevice != null) {
                                     Text(
-                                        "🟢 Connected to: ${currentDevice?.name ?: "Windows PC"}",
+                                        "🟢 Tally Connected: ${currentDevice?.name ?: "Windows PC"}",
                                         fontSize = 11.sp,
                                         color = Color(0xFF2E7D32),
                                         fontWeight = FontWeight.Medium,
@@ -673,32 +818,44 @@ fun BatchScannerScreen(
                             }
                         }
 
-                        // Big Send to Tally & Navigation Buttons
+                        // Big NEXT PRODUCT Action Buttons (As requested by user!)
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Giant Main Action Button: Send & Next
+                            // GIANT PRIMARY BUTTON: "NEXT PRODUCT (Tally Me Enter Kare)"
                             Button(
-                                onClick = { sendAndNext() },
+                                onClick = { sendAndNextProduct() },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(58.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                    .height(62.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isCurrentScanned) Color(0xFF2E7D32) else Color(0xFF1976D2)
-                                )
+                                    containerColor = if (isCurrentScanned) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = if (isCurrentScanned) "Re-Send & Next (पुन्हा पाठवा)" else "SEND TO TALLY & NEXT (Enter)",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 15.sp
+                                Icon(
+                                    if (isCurrentScanned) Icons.Default.SkipNext else Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(26.dp)
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "NEXT PRODUCT ➡️ (Tally Me Enter Kare)",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp
+                                    )
+                                    Text(
+                                        text = "Tally मध्ये बारकोड पाठवून पुढचा प्रॉडक्ट घ्या",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                }
                             }
 
-                            // Navigation Row: Prev • Auto-Send • Next
+                            // Secondary Row: Prev • Auto-Send • Next
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -708,29 +865,29 @@ fun BatchScannerScreen(
                                         if (currentScreenIndex > 0) currentScreenIndex--
                                     },
                                     enabled = currentScreenIndex > 0,
-                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    modifier = Modifier.weight(1f).height(44.dp),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Icon(Icons.Default.ArrowBackIos, contentDescription = "Prev", modifier = Modifier.size(14.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = "Prev", modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Prev")
                                 }
 
                                 Button(
                                     onClick = { startAutoSend() },
-                                    modifier = Modifier.weight(1.3f).height(46.dp),
+                                    modifier = Modifier.weight(1.3f).height(44.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isAutoSending) Color(0xFFE65100) else Color(0xFF4527A0)
+                                        containerColor = if (isAutoSending) Color(0xFFD32F2F) else Color(0xFF4527A0)
                                     )
                                 ) {
                                     Icon(
                                         if (isAutoSending) Icons.Default.Pause else Icons.Default.PlayArrow,
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (isAutoSending) "Stop Auto" else "Auto-Send All", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (isAutoSending) "Pause Auto" else "Auto All", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(
@@ -738,12 +895,12 @@ fun BatchScannerScreen(
                                         if (currentScreenIndex < barcodes.size - 1) currentScreenIndex++
                                     },
                                     enabled = currentScreenIndex < barcodes.size - 1,
-                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    modifier = Modifier.weight(1f).height(44.dp),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text("Next")
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(Icons.Default.ArrowForwardIos, contentDescription = "Next", modifier = Modifier.size(14.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = "Next", modifier = Modifier.size(14.dp))
                                 }
                             }
                         }
@@ -752,7 +909,7 @@ fun BatchScannerScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(130.dp)
+                                .height(115.dp)
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
                                 .padding(8.dp)
                         ) {
@@ -761,8 +918,8 @@ fun BatchScannerScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("All Barcodes (${barcodes.size}):", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Tap to jump & send", fontSize = 10.sp, color = Color.Gray)
+                                Text("Bill Products (${barcodes.size}):", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Tap any to send instantly", fontSize = 10.sp, color = Color.Gray)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -774,7 +931,7 @@ fun BatchScannerScreen(
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(
-                                                if (isSelected) Color(0xFF1976D2).copy(alpha = 0.2f)
+                                                if (isSelected) Color(0xFFE65100).copy(alpha = 0.2f)
                                                 else if (isItemScanned) Color(0xFF4CAF50).copy(alpha = 0.1f)
                                                 else Color.Transparent
                                             )
@@ -782,7 +939,7 @@ fun BatchScannerScreen(
                                                 currentScreenIndex = idx
                                                 transmitBarcode(item.correctedValue)
                                             }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            .padding(horizontal = 8.dp, vertical = 3.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -791,8 +948,8 @@ fun BatchScannerScreen(
                                                 "${idx + 1}.",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Color(0xFF1976D2) else Color.Gray,
-                                                modifier = Modifier.width(24.dp)
+                                                color = if (isSelected) Color(0xFFE65100) else Color.Gray,
+                                                modifier = Modifier.width(22.dp)
                                             )
                                             Text(
                                                 item.correctedValue,
@@ -883,13 +1040,28 @@ fun BatchScannerScreen(
                             }
                         }
 
-                        // Bottom Last Scanned Result & Manual Input
+                        // Bottom Action Panel: Photo Bill Button + Manual Input
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(14.dp),
+                                .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            // 📸 PROMINENT PHOTO BILL BUTTON RIGHT UNDER SCANNER!
+                            Button(
+                                onClick = { billCameraLauncher.launch(null) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("📸 Click Bill Photo (हस्तलिखित बिलाचा फोटो काढा)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+
                             AnimatedVisibility(visible = lastScannedBarcode != null) {
                                 ElevatedCard(
                                     modifier = Modifier.fillMaxWidth(),
