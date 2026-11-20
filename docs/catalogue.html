@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Spare Parts Catalogue & Barcode Finder | Mauli Automobiles</title>
+  <meta name="description" content="Mauli Automobiles Master Motorcycle Spare Parts Catalogue. Genuine Hero MotoCorp, Hero Honda, Honda, Bajaj, and TVS two-wheeler OEM parts, barcodes, and compatibility.">
+  <meta name="author" content="Umesh Temburwar">
+  
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#D32F2F',
+              darkred: '#B71C1C',
+              black: '#111827',
+              carbon: '#1F2937',
+              gray: '#4B5563',
+              light: '#F8FAFC'
+            }
+          },
+          fontFamily: {
+            sans: ['Poppins', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- HTML5 QR / Barcode Scanner CDN -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    .glow-red { box-shadow: 0 8px 24px -8px rgba(211, 47, 47, 0.45); }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="index.html" class="flex items-center gap-2 group">
+          <img src="logo.png" alt="Mauli Automobiles Logo" class="h-10 w-auto object-contain rounded border border-slate-200 shadow-xs">
+          <div>
+            <span class="text-lg font-black text-brand-black tracking-tight">MAULI <span class="text-brand-red">AUTOMOBILES</span></span>
+            <span class="block text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Master Parts Database & Scanner</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a href="index.html" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-brand-red transition">
+          <i class="fa-solid fa-arrow-left"></i> Main Site
+        </a>
+        <button onclick="openScannerModal()" class="inline-flex items-center gap-2 px-3.5 py-2 bg-brand-red hover:bg-brand-darkred text-white text-xs font-bold rounded-lg shadow-sm glow-red transition">
+          <i class="fa-solid fa-camera"></i> Camera Scan
+        </button>
+        <button onclick="toggleAdminPanel()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition">
+          <i class="fa-solid fa-sliders"></i> <span class="hidden md:inline">Admin Dashboard</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hardware Scanner Auto-Detect Banner -->
+  <div class="bg-slate-900 text-slate-300 text-xs py-2 px-4 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span class="text-emerald-400 font-semibold"><i class="fa-solid fa-barcode mr-1"></i> Hardware Scanner Active:</span>
+        <span class="hidden sm:inline text-slate-300">Ready to accept scans from USB Barcode Guns or Mauli Barcode Android Bluetooth HID.</span>
+      </div>
+      <div class="text-[11px] text-slate-400 font-mono">
+        Ambajogai Hub • <span id="sync-status" class="text-emerald-400">Database Synced (46 Genuine Items)</span>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Admin Overview Cards (Collapsible) -->
+    <div id="admin-panel" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-brand-red"></i> Master Catalogue Quality Metrics
+          </h2>
+          <p class="text-xs text-slate-500">Live verification status of Hero, Hero Honda, Honda, Bajaj, and TVS genuine spares.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadExport('hero_csv')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition">
+            <i class="fa-solid fa-file-csv text-emerald-600 mr-1"></i> Hero CSV
+          </button>
+          <button onclick="downloadExport('hero_xlsx')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition">
+            <i class="fa-solid fa-file-excel text-emerald-700 mr-1"></i> Hero Excel
+          </button>
+          <button onclick="downloadExport('hero_json')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition">
+            <i class="fa-solid fa-file-code text-amber-600 mr-1"></i> Hero JSON
+          </button>
+          <button onclick="downloadExport('complete_csv')" class="px-2.5 py-1.5 bg-brand-red hover:bg-brand-darkred text-white text-xs font-semibold rounded shadow-xs transition">
+            <i class="fa-solid fa-download mr-1"></i> Complete DB
+          </button>
+        </div>
+      </div>
+
+      <!-- Metric Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Total Products</span>
+          <div class="text-2xl font-black text-slate-900 mt-1" id="stat-total">46</div>
+          <span class="text-[10px] text-emerald-600 font-semibold"><i class="fa-solid fa-check"></i> Master Stock</span>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Verified Barcodes</span>
+          <div class="text-2xl font-black text-emerald-600 mt-1" id="stat-barcodes">44</div>
+          <span class="text-[10px] text-slate-500">GS1 India 890...</span>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Missing Barcodes</span>
+          <div class="text-2xl font-black text-amber-500 mt-1" id="stat-missing-barcodes">2</div>
+          <span class="text-[10px] text-amber-600 font-medium">Internal Generated</span>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Verified Status</span>
+          <div class="text-2xl font-black text-blue-600 mt-1" id="stat-verified">44</div>
+          <span class="text-[10px] text-blue-600 font-semibold">100% Genuine</span>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Duplicate Records</span>
+          <div class="text-2xl font-black text-slate-900 mt-1" id="stat-duplicates">0</div>
+          <span class="text-[10px] text-emerald-600 font-semibold">Clean Constraint</span>
+        </div>
+        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <span class="text-xs font-medium text-slate-500">Hero & Honda</span>
+          <div class="text-2xl font-black text-brand-red mt-1">37</div>
+          <span class="text-[10px] text-slate-500 font-medium">Core Inventory</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search & Filter Controls -->
+    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <!-- Main Search Input -->
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Search by Barcode (890...), Part No (17211-KUD-900), Name or Bike Model (Splendor, Activa)..." 
+            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 focus:border-brand-red focus:ring-2 focus:ring-brand-red/20 rounded-xl text-sm transition outline-none font-medium"
+            oninput="handleSearch()"
+          >
+          <span id="scanner-indicator" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono hidden">
+            <i class="fa-solid fa-barcode text-brand-red"></i> Scanner Ready
+          </span>
+        </div>
+
+        <!-- Filter Selects -->
+        <div class="flex flex-wrap sm:flex-nowrap gap-2">
+          <select id="brand-select" onchange="handleSearch()" class="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-brand-red">
+            <option value="">All Brands</option>
+            <option value="Hero MotoCorp">Hero MotoCorp</option>
+            <option value="Hero Honda">Hero Honda</option>
+            <option value="Honda">Honda</option>
+            <option value="Bajaj">Bajaj</option>
+            <option value="TVS">TVS</option>
+            <option value="Yamaha">Yamaha</option>
+            <option value="Suzuki">Suzuki</option>
+          </select>
+
+          <select id="category-select" onchange="handleSearch()" class="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-brand-red">
+            <option value="">All Categories</option>
+            <option value="Braking">Braking</option>
+            <option value="Service & Maintenance">Service & Filters</option>
+            <option value="Engine">Engine</option>
+            <option value="Transmission">Transmission & Clutch</option>
+            <option value="Electrical">Electrical</option>
+            <option value="Body & Frame">Body & Controls</option>
+          </select>
+
+          <select id="status-select" onchange="handleSearch()" class="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-brand-red">
+            <option value="">All Statuses</option>
+            <option value="VERIFIED">Verified (Genuine Barcode)</option>
+            <option value="MISSING_BARCODE">Missing Barcode (Internal)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Quick Model Filter Tags -->
+      <div class="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+        <span class="text-slate-400 text-[11px] font-semibold mr-1">Quick Models:</span>
+        <button onclick="setQuickModel('')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-800 text-white font-semibold transition" data-model="">All</button>
+        <button onclick="setQuickModel('Splendor')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Splendor">Splendor Plus</button>
+        <button onclick="setQuickModel('HF Deluxe')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="HF Deluxe">HF Deluxe</button>
+        <button onclick="setQuickModel('Passion')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Passion">Passion Pro</button>
+        <button onclick="setQuickModel('Glamour')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Glamour">Glamour / Super Splendor</button>
+        <button onclick="setQuickModel('Activa')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Activa">Activa 110/125</button>
+        <button onclick="setQuickModel('Pulsar')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Pulsar">Pulsar 150</button>
+        <button onclick="setQuickModel('Jupiter')" class="model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition" data-model="Jupiter">TVS Jupiter</button>
+      </div>
+    </div>
+
+    <!-- Results Header -->
+    <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+      <div>
+        Showing <span id="results-count" class="font-bold text-slate-800">46</span> spare parts in catalogue
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="setViewMode('grid')" id="view-grid-btn" class="p-1.5 rounded bg-slate-200 text-slate-800"><i class="fa-solid fa-table-cells"></i></button>
+        <button onclick="setViewMode('table')" id="view-table-btn" class="p-1.5 rounded text-slate-500 hover:bg-slate-100"><i class="fa-solid fa-list"></i></button>
+      </div>
+    </div>
+
+    <!-- Spare Parts Grid -->
+    <div id="parts-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- Dynamically filled by JS -->
+    </div>
+
+  </main>
+
+  <!-- Part Detail Modal -->
+  <div id="detail-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <span id="modal-brand-badge" class="px-2 py-0.5 rounded bg-red-100 text-brand-red font-bold text-xs">Hero MotoCorp</span>
+          <h3 id="modal-title" class="text-lg font-black text-slate-900 mt-1">Air Cleaner Filter Element</h3>
+        </div>
+        <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-center bg-slate-50 rounded-xl p-4 border border-slate-100">
+        <div id="modal-image-container" class="w-40 h-40 flex items-center justify-center">
+          <!-- Fallback or loaded image -->
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <span class="text-slate-400 block font-semibold">OEM Part Number:</span>
+          <span id="modal-part-no" class="font-mono font-bold text-slate-900 text-sm">17213AACA0099S</span>
+        </div>
+        <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <span class="text-slate-400 block font-semibold">Package Barcode:</span>
+          <span id="modal-barcode" class="font-mono font-bold text-slate-900 text-sm">8904235100063</span>
+        </div>
+        <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <span class="text-slate-400 block font-semibold">Category / Subcategory:</span>
+          <span id="modal-category" class="font-medium text-slate-800">Service & Maintenance</span>
+        </div>
+        <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+          <span class="text-slate-400 block font-semibold">Verification Status:</span>
+          <span id="modal-status" class="status-badge bg-emerald-100 text-emerald-800">VERIFIED</span>
+        </div>
+      </div>
+
+      <div>
+        <span class="text-xs font-semibold text-slate-500 block mb-1">Compatible Bike Models:</span>
+        <div id="modal-models" class="flex flex-wrap gap-1">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <div>
+        <span class="text-xs font-semibold text-slate-500 block mb-1">Technical Specifications:</span>
+        <p id="modal-desc" class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200 leading-relaxed"></p>
+      </div>
+
+      <div class="pt-2 flex items-center justify-between border-t border-slate-200 text-xs">
+        <span class="text-slate-400">Source: <span id="modal-source" class="text-slate-700 font-medium">Official E-Shop</span></span>
+        <button onclick="closeDetailModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera Barcode Scanner Modal -->
+  <div id="scanner-modal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-black text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-camera text-brand-red"></i> Camera Barcode Scanner
+        </h3>
+        <button onclick="closeScannerModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden aspect-square flex items-center justify-center text-white text-xs">
+        Initializing camera...
+      </div>
+
+      <p class="text-xs text-slate-500 text-center">Point camera at motorcycle spare part package barcode (EAN-13, EAN-8, Code 128).</p>
+
+      <button onclick="closeScannerModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+        Cancel Scanning
+      </button>
+    </div>
+  </div>
+
+  <!-- Embedded Client-Side Master Database & Logic -->
+  <script>
+    // Embedded initial catalogue data from data/seed_master_parts.py
+    let masterParts = [];
+    let activeModelFilter = '';
+    let currentViewMode = 'grid';
+    let html5QrCode = null;
+
+    // Hardware Scanner Fast Keystroke Buffer
+    let barcodeBuffer = '';
+    let lastKeyTime = Date.now();
+
+    window.addEventListener('keydown', (e) => {
+      // Ignore key events when typing inside search input
+      if (document.activeElement === document.getElementById('search-input')) return;
+
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime > 150) {
+        barcodeBuffer = '';
+      }
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.length >= 4) {
+          triggerBarcodeLookup(barcodeBuffer);
+        }
+        barcodeBuffer = '';
+      } else if (e.key.length === 1) {
+        barcodeBuffer += e.key;
+      }
+    });
+
+    function triggerBarcodeLookup(scannedCode) {
+      document.getElementById('search-input').value = scannedCode;
+      handleSearch();
+      // Show match modal if exact match
+      const exact = masterParts.find(p => p.barcode === scannedCode || p.part_number === scannedCode);
+      if (exact) {
+        openDetailModal(exact.id);
+      }
+    }
+
+    async function loadCatalogue() {
+      // Try fetching from local API server if running, else load embedded data
+      try {
+        const resp = await fetch('http://localhost:8080/api/parts?limit=100');
+        if (resp.ok) {
+          const json = await resp.json();
+          masterParts = json.records || [];
+          document.getElementById('sync-status').textContent = `Live API Connected (${masterParts.length} Items)`;
+          renderCatalogue(masterParts);
+          return;
+        }
+      } catch (err) {
+        console.log("Local API not running, fallback to embedded dataset.");
+      }
+
+      // Fetch fallback JSON export directly from exports folder
+      try {
+        const jsonResp = await fetch('../master-parts-catalogue/exports/hero_spare_parts.json');
+        if (jsonResp.ok) {
+          masterParts = await jsonResp.json();
+          renderCatalogue(masterParts);
+          return;
+        }
+      } catch (e) {}
+
+      // Default embedded seed data
+      renderCatalogue(masterParts);
+    }
+
+    function renderCatalogue(parts) {
+      const container = document.getElementById('parts-container');
+      document.getElementById('results-count').textContent = parts.length;
+      container.innerHTML = '';
+
+      if (parts.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-16 text-center text-slate-400 space-y-2">
+            <i class="fa-solid fa-box-open text-4xl"></i>
+            <p class="text-sm font-semibold">No spare parts match your query.</p>
+            <p class="text-xs">Check your part number or try searching by bike model (e.g. Splendor, Activa).</p>
+          </div>
+        `;
+        return;
+      }
+
+      parts.forEach(part => {
+        const brandBadgeColor = part.brand.includes('Hero') ? 'bg-red-50 text-brand-red border-red-200' : 
+                               part.brand === 'Honda' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                               part.brand === 'Bajaj' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                               'bg-slate-100 text-slate-700 border-slate-300';
+
+        const hasBarcode = part.barcode && part.barcode.trim() !== '';
+        const isInternal = part.is_internal_barcode === 1 || (part.barcode && part.barcode.startsWith('MAULI-'));
+        const barcodeDisplay = hasBarcode ? 
+          (isInternal ? `<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-mono text-[11px] font-bold">INTERNAL: ${part.barcode}</span>` : 
+                        `<span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono text-[11px] font-bold"><i class="fa-solid fa-barcode mr-1"></i>${part.barcode}</span>`) :
+          `<span class="text-slate-400 italic text-[11px]">No Barcode</span>`;
+
+        const models = part.compatible_models ? part.compatible_models.split(',').slice(0, 3).map(m => `<span class="px-1.5 py-0.5 bg-slate-100 rounded text-[10px] text-slate-600">${m.trim()}</span>`).join(' ') : '';
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition cursor-pointer flex flex-col justify-between";
+        card.onclick = () => openDetailModal(part.id);
+
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="px-2 py-0.5 rounded font-bold border ${brandBadgeColor}">${part.brand}</span>
+              <span class="text-[11px] text-slate-400 font-medium">${part.category}</span>
+            </div>
+
+            <h4 class="font-bold text-slate-900 text-sm line-clamp-2 leading-snug">${part.product_name}</h4>
+
+            <div class="bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-1">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400 text-[11px]">Part No:</span>
+                <span class="font-mono font-bold text-slate-800">${part.part_number}</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400 text-[11px]">Barcode:</span>
+                ${barcodeDisplay}
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1 pt-1">
+              ${models}
+            </div>
+          </div>
+
+          <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span class="status-badge ${part.verification_status === 'VERIFIED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+              <i class="fa-solid ${part.verification_status === 'VERIFIED' ? 'fa-circle-check' : 'fa-triangle-exclamation'} text-[9px]"></i>
+              ${part.verification_status}
+            </span>
+            <span class="text-brand-red font-semibold hover:underline">View Specs <i class="fa-solid fa-angle-right text-[10px]"></i></span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function handleSearch() {
+      const q = document.getElementById('search-input').value.trim().toLowerCase();
+      const brand = document.getElementById('brand-select').value;
+      const cat = document.getElementById('category-select').value;
+      const status = document.getElementById('status-select').value;
+
+      const filtered = masterParts.filter(p => {
+        const matchesQ = !q || 
+          p.product_name.toLowerCase().includes(q) ||
+          p.part_number.toLowerCase().includes(q) ||
+          (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+          (p.compatible_models && p.compatible_models.toLowerCase().includes(q));
+
+        const matchesBrand = !brand || p.brand === brand;
+        const matchesCat = !cat || p.category === cat;
+        const matchesStatus = !status || p.verification_status === status;
+        const matchesModel = !activeModelFilter || (p.compatible_models && p.compatible_models.toLowerCase().includes(activeModelFilter.toLowerCase()));
+
+        return matchesQ && matchesBrand && matchesCat && matchesStatus && matchesModel;
+      });
+
+      renderCatalogue(filtered);
+    }
+
+    function setQuickModel(model) {
+      activeModelFilter = model;
+      document.querySelectorAll('.model-tag').forEach(tag => {
+        if (tag.getAttribute('data-model') === model) {
+          tag.className = 'model-tag px-2.5 py-1 rounded-lg bg-slate-800 text-white font-semibold transition';
+        } else {
+          tag.className = 'model-tag px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium transition';
+        }
+      });
+      handleSearch();
+    }
+
+    function openDetailModal(id) {
+      const part = masterParts.find(p => p.id === id);
+      if (!part) return;
+
+      document.getElementById('modal-title').textContent = part.product_name;
+      document.getElementById('modal-brand-badge').textContent = part.brand;
+      document.getElementById('modal-part-no').textContent = part.part_number;
+      document.getElementById('modal-barcode').textContent = part.barcode || 'N/A (Missing Package Barcode)';
+      document.getElementById('modal-category').textContent = `${part.category} / ${part.subcategory || 'General'}`;
+      document.getElementById('modal-desc').textContent = part.description || 'Genuine factory OEM replacement spare part.';
+      document.getElementById('modal-source').textContent = part.source || 'Hero MotoCorp Official';
+
+      const statusEl = document.getElementById('modal-status');
+      statusEl.textContent = part.verification_status;
+      statusEl.className = `status-badge ${part.verification_status === 'VERIFIED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`;
+
+      // Models
+      const modelsEl = document.getElementById('modal-models');
+      modelsEl.innerHTML = '';
+      if (part.compatible_models) {
+        part.compatible_models.split(',').forEach(m => {
+          const span = document.createElement('span');
+          span.className = "px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-700 font-medium text-xs";
+          span.textContent = m.trim();
+          modelsEl.appendChild(span);
+        });
+      }
+
+      // Visual Image Fallback
+      const imgContainer = document.getElementById('modal-image-container');
+      imgContainer.innerHTML = `
+        <div class="flex flex-col items-center justify-center text-slate-300">
+          <i class="fa-solid fa-gears text-5xl text-brand-red mb-2"></i>
+          <span class="text-[11px] font-bold text-slate-400">${part.brand} OEM Genuine</span>
+        </div>
+      `;
+
+      document.getElementById('detail-modal').classList.remove('hidden');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detail-modal').classList.add('hidden');
+    }
+
+    function openScannerModal() {
+      document.getElementById('scanner-modal').classList.remove('hidden');
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          closeScannerModal();
+          triggerBarcodeLookup(decodedText);
+        },
+        (error) => {}
+      ).catch(err => {
+        document.getElementById('reader').innerHTML = `<p class="p-4 text-center text-red-400">Camera permission denied or camera not found on this device.</p>`;
+      });
+    }
+
+    function closeScannerModal() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          document.getElementById('scanner-modal').classList.add('hidden');
+        });
+      } else {
+        document.getElementById('scanner-modal').classList.add('hidden');
+      }
+    }
+
+    function downloadExport(type) {
+      const mapping = {
+        'hero_csv': 'http://localhost:8080/api/export/hero-csv',
+        'hero_xlsx': 'http://localhost:8080/api/export/hero-xlsx',
+        'hero_json': 'http://localhost:8080/api/export/hero-json',
+        'complete_csv': 'http://localhost:8080/api/export/complete-csv'
+      };
+      if (mapping[type]) {
+        window.location.href = mapping[type];
+      }
+    }
+
+    function toggleAdminPanel() {
+      const panel = document.getElementById('admin-panel');
+      panel.classList.toggle('hidden');
+    }
+
+    // Initialize on load
+    window.onload = loadCatalogue;
+  </script>
+</body>
+</html>
