@@ -5,8 +5,10 @@ Turn your Android smartphone into a **wireless Bluetooth barcode scanner** for *
 ### Shop Details
 * **Shop**: **Mauli Automobiles** (मौली ऑटोमोबाईल्स)
 * **Specialization**: Honda & Hero Genuine 2-Wheelers Spares (Wholesale & Retail)
-* **Address**: Kallam Ambajogai Road, Ambajogai, Maharashtra 431517
+* **Address**: Raje Shivchhatrapati N.P. Complex, Mondha Road, Ambajogai, Maharashtra 431517
 * **Contact**: 098232 91444
+* **Maintainer**: **Umesh Temburwar**
+* **Repository**: [https://github.com/Umesh-Temburwar/Mauli-Automobiles-](https://github.com/Umesh-Temburwar/Mauli-Automobiles-)
 
 > **Why this is better than other barcode apps:**
 > - **Zero PC Software Required**: You do **not** need to install or run any software on your Windows PC.
@@ -30,14 +32,13 @@ flowchart LR
 
 ## 2. Step 1: Install the Android App
 
-1. Go to your GitHub repository Actions:
-   [https://github.com/Umesh-Temburwar/SmartScan/actions](https://github.com/Umesh-Temburwar/SmartScan/actions)
-2. Click on the latest workflow run and download the **APK(s) debug generated** artifact.
-3. Transfer or open the `.apk` file on your Android device (Android 9.0 or higher required).
-4. Tap **Install** (if prompted, allow installation from unknown sources).
-5. Launch the **HID Barcode Scanner** app.
-6. Grant the requested permissions:
-   - **Camera**: Required to read barcodes using the camera.
+1. Download the latest APK from the repository:
+   [https://github.com/Umesh-Temburwar/Mauli-Automobiles-](https://github.com/Umesh-Temburwar/Mauli-Automobiles-)
+2. Transfer or open the `.apk` file on your Android device (Android 9.0 or higher required).
+3. Tap **Install** (if prompted, allow installation from unknown sources).
+4. Launch the **MAULI BARCODE** app.
+5. Grant the requested permissions:
+   - **Camera**: Required to read barcodes and snap bill photos using the camera.
    - **Nearby Devices / Bluetooth**: Required to pair with your PC.
 
 ---
@@ -49,57 +50,30 @@ flowchart LR
    - Click on **Bluetooth & devices**.
    - Make sure Bluetooth is toggled **ON**.
    - Click **Add device** > **Bluetooth**.
-2. **On your Android Phone**:
-   - In the HID Barcode Scanner app, you will see a list of available/paired Bluetooth devices.
-   - If your PC is not listed, tap **Scan for devices**.
-   - Tap on your **PC Name** from the list.
-   - Tap **Pair** when the Bluetooth pairing prompt appears on both your phone and PC.
-3. Windows will notify you:
-   > *"Bluetooth HID Device is connected and ready to use."*
-4. In the app, your PC will now display a green **Connected** status indicator!
+
+2. **On your Phone**:
+   - In **MAULI BARCODE**, tap **Bluetooth Connect to Tally** (or the Devices tab).
+   - Find your PC in the list and tap on it.
+   - A 6-digit PIN popup will appear on both your phone and PC screen.
+   - Confirm that the numbers match, and tap **Pair** on both.
+   - Windows will display: *"Your device is ready to go!"*.
 
 ---
 
-## 4. Step 3: Scan Barcodes into Notepad, Excel, or TallyPrime
+## 4. Step 3: Test Direct Typing into PC
 
-1. **Open your target application on Windows**:
-   - **Notepad**: Open a new text document and click inside.
-   - **Microsoft Excel**: Click on the cell where you want to enter the barcode.
-   - **TallyPrime**: Navigate to Item Master or Voucher Entry where item alias is entered.
-   - **Billing / POS Software**: Focus on the barcode input field.
-2. **Scan on your phone**:
-   - Open the **Scanner** tab in the app.
-   - Point your phone camera at any 1D or 2D barcode (EAN-13, UPC, Code 128, QR Code).
-   - As soon as the camera sees the barcode:
-     - The phone beeps/vibrates.
-     - The barcode characters are sent over Bluetooth as keyboard strokes.
-     - The barcode types directly into your PC cursor position!
+1. On your PC, open **Notepad** (`Win + R`, type `notepad`, press Enter).
+2. Click inside Notepad so the cursor is blinking.
+3. On your phone, tap **Batch Barcode Scanner** or open the scanner view.
+4. Point your camera at any barcode (e.g. on a spare part box or printed bill sheet).
+5. **The code instantly types into Notepad and presses Enter!**
 
 ---
 
-## 5. Recommended Settings
+## 5. Step 4: Use with TallyPrime
 
-In the app, tap the **Settings** icon to customize:
-
-| Setting | Recommended Value | Purpose |
-| :--- | :--- | :--- |
-| **Extra Key (Suffix)** | `\n (Enter)` | Automatically presses Enter after each scan (moves to next line in Notepad, next row in Excel, confirms item in TallyPrime). |
-| **Alternative Suffix** | `\t (Tab)` | Automatically moves to the next column in Excel or next field in billing software. |
-| **Continuous Scanning** | `Enabled` | Scan multiple items in rapid succession without tapping the screen. |
-| **Keyboard Layout** | `US (Default)` | Matches your Windows keyboard layout so keys type correctly. |
-| **Flashlight / Torch** | As needed | Toggle on to scan items on dark stockroom shelves. |
-| **Scan History** | `Enabled` | Saves a log of all scanned barcodes with export to CSV/JSON. |
-
----
-
-## 6. Troubleshooting
-
-- **Windows says "Driver error" or doesn't type**:
-  - Unpair the phone from Windows Settings > Bluetooth > Remove device.
-  - In phone Bluetooth settings, unpair the PC.
-  - Restart phone Bluetooth, then pair again from the HID Barcode Scanner app.
-- **My phone says "Bluetooth HID not supported"**:
-  - The Android device must run Android 9 (Pie) or higher.
-  - A small number of older custom Android ROMs disable `BluetoothHidDevice` in firmware. Use any standard Android 9+ device.
-- **Barcodes type with wrong characters**:
-  - In App Settings > **Keyboard Layout**, select the layout that matches your Windows keyboard language (US layout is standard for English).
+1. Open **TallyPrime** on Windows.
+2. Go to **Gateway of Tally** -> **Vouchers** -> Press `F8` for Sales.
+3. Click in the **Name of Item** or **Part Number** column.
+4. Scan the barcode or use **Direct Send to Tally** in the app.
+5. The exact part code is typed in, `Enter` is triggered, and your sales voucher moves to the quantity column!
