@@ -211,7 +211,7 @@ open class PreferenceStore {
         ) = EnumPref(this, fromOrdinal).also { ALL_PREFS.add(it) }
 
         // Connection
-        val AUTO_CONNECT = booleanPreferencesKey("auto_connect") defaultsTo false
+        val AUTO_CONNECT = booleanPreferencesKey("auto_connect") defaultsTo true
         val CONNECTION_MODE = intPreferencesKey("connection_mode").enumDefaultsTo(ConnectionMode::fromIndex)
 
         // Package names of external transport extensions that should receive scan broadcasts.

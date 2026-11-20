@@ -197,15 +197,20 @@ class MlKitOcrProvider : BarcodeOcrProvider {
     ) {
         if (cleanedValue.length < 4 || isStopword(cleanedValue)) return
 
-        val existing = resultsMap[cleanedValue]
-        if (existing == null || confidence > existing.confidence) {
-            resultsMap[cleanedValue] = ExtractedBarcode(
+        // Run through trained dictionary fuzzy matcher
+        val finalCode = AutomobileTrainedDictionary.matchOrAutoCorrect(cleanedValue)
+        val isTrainedMatch = AutomobileTrainedDictionary.KNOWN_OEM_PARTS.contains(finalCode)
+        val finalConfidence = if (isTrainedMatch) 0.99f else confidence
+
+        val existing = resultsMap[finalCode]
+        if (existing == null || finalConfidence > existing.confidence) {
+            resultsMap[finalCode] = ExtractedBarcode(
                 originalValue = originalValue,
-                cleanedValue = cleanedValue,
-                confidence = confidence.coerceIn(0.1f, 1.0f),
+                cleanedValue = finalCode,
+                confidence = finalConfidence.coerceIn(0.1f, 1.0f),
                 pageNumber = pageNumber,
-                isPotentialBarcode = cleanedValue.length in 6..18,
-                warning = if (detectedType != null) null else "Handwritten Part Code"
+                isPotentialBarcode = finalCode.length in 6..18,
+                warning = if (isTrainedMatch) null else (detectedType ?: "Handwritten Part Code")
             )
         }
     }

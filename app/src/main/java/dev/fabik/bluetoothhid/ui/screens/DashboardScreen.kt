@@ -152,6 +152,63 @@ fun DashboardScreen(
                 )
             }
 
+            // 1.5 Hero 1-Tap Photo Bill to Tally (Simplest 1-Click Access for Shopkeeper!)
+            item {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToBatchScanner() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFFE65100)
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "⚡ 1-Tap Bill Photo to Tally",
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                "बिलाचा फोटो काढा व एका क्लिकवर Tally मध्ये भरा",
+                                color = Color.White.copy(alpha = 0.95f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Icon(
+                            Icons.Default.FlashOn,
+                            contentDescription = null,
+                            tint = Color.Yellow,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            }
+
             // 2. Summary Statistics Card
             item {
                 StatsOverviewCard(stats = stats)
