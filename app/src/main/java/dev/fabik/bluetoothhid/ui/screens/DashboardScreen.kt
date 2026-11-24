@@ -77,6 +77,22 @@ import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import dev.fabik.bluetoothhid.tally.TallyProfileRepository
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import dev.fabik.bluetoothhid.tally.WifiTallyManager
+import dev.fabik.bluetoothhid.tally.WifiStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,11 +116,60 @@ fun DashboardScreen(
     val currentDevice by controller?.currentDevice?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf(null) }
 
+    val scope = rememberCoroutineScope()
+    val wifiManager = remember { WifiTallyManager.getInstance(context) }
+    val isWifiMode by wifiManager.isWifiMode.collectAsStateWithLifecycle()
+    val wifiStatus by wifiManager.wifiStatus.collectAsStateWithLifecycle()
+    val serverIp by wifiManager.serverIp.collectAsStateWithLifecycle()
+    val pcHostname by wifiManager.pcHostname.collectAsStateWithLifecycle()
+    val lastWifiMsg by wifiManager.lastMessage.collectAsStateWithLifecycle()
+
+    var showIpDialog by remember { mutableStateOf(false) }
+    var editIpText by remember(serverIp) { mutableStateOf(serverIp) }
+
     var stats by remember { mutableStateOf(SummaryStats()) }
 
     LaunchedEffect(Unit) {
         val db = MauliDatabase.getInstance(context)
         stats = db.getSummaryStats()
+    }
+
+    if (showIpDialog) {
+        AlertDialog(
+            onDismissRequest = { showIpDialog = false },
+            title = { Text("PC WiFi IP Address Set Karein") },
+            text = {
+                Column {
+                    Text(
+                        "Apne TallyPrime wale PC ka WiFi IP enter karein:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editIpText,
+                        onValueChange = { editIpText = it },
+                        label = { Text("PC IP Address (e.g. 192.168.1.104)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    wifiManager.setServerIp(editIpText)
+                    showIpDialog = false
+                    Toast.makeText(context, "IP Set to $editIpText! Checking connection...", Toast.LENGTH_SHORT).show()
+                }) {
+                    Text("Save & Connect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIpDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -170,13 +235,173 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Bluetooth Connection Status Banner
+            // 1. Connection Mode Switcher (WiFi Tally Mode vs Bluetooth Mode)
             item {
-                BluetoothStatusBar(
-                    isConnected = currentDevice != null,
-                    deviceName = currentDevice?.name ?: currentDevice?.address,
-                    onClick = onNavigateToBluetooth
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Mode Selector Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = isWifiMode,
+                            onClick = { wifiManager.setWifiMode(true) },
+                            label = { Text("📶 WiFi Mode (Recommended)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                            leadingIcon = { Icon(Icons.Default.Wifi, null, modifier = Modifier.size(16.dp)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFE8F5E9),
+                                selectedLabelColor = Color(0xFF2E7D32)
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = !isWifiMode,
+                            onClick = { wifiManager.setWifiMode(false) },
+                            label = { Text("⚡ Bluetooth", fontSize = 12.sp) },
+                            leadingIcon = { Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFE3F2FD),
+                                selectedLabelColor = Color(0xFF1565C0)
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (isWifiMode) {
+                        // WiFi Tally Card
+                        ElevatedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.elevatedCardColors(
+                                containerColor = when (wifiStatus) {
+                                    WifiStatus.CONNECTED -> Color(0xFFE8F5E9)
+                                    WifiStatus.SEARCHING -> Color(0xFFFFF8E1)
+                                    else -> Color(0xFFFFEBEE)
+                                }
+                            ),
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    when (wifiStatus) {
+                                                        WifiStatus.CONNECTED -> Color(0xFF2E7D32)
+                                                        WifiStatus.SEARCHING -> Color(0xFFF57F17)
+                                                        else -> Color(0xFFC62828)
+                                                    }
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Wifi,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = when (wifiStatus) {
+                                                    WifiStatus.CONNECTED -> "Tally WiFi: CONNECTED 🟢"
+                                                    WifiStatus.SEARCHING -> "Searching PC on WiFi... 🔍"
+                                                    else -> "Tally WiFi: DISCONNECTED 🔴"
+                                                },
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = when (wifiStatus) {
+                                                    WifiStatus.CONNECTED -> Color(0xFF1B5E20)
+                                                    WifiStatus.SEARCHING -> Color(0xFFE65100)
+                                                    else -> Color(0xFFB71C1C)
+                                                }
+                                            )
+                                            Text(
+                                                text = "PC: ${pcHostname ?: "Tally PC"} • $serverIp:8080",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.DarkGray
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = if (wifiStatus == WifiStatus.CONNECTED) "ONLINE" else "OFFLINE",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (wifiStatus == WifiStatus.CONNECTED) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = lastWifiMsg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    fontSize = 11.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            wifiManager.discoverPc(scope) { ok, msg ->
+                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Sync, null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Auto Detect", fontSize = 11.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            wifiManager.pingServer(serverIp) { ok, msg ->
+                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Ping Test", fontSize = 11.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { showIpDialog = true },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Edit IP", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Bluetooth Status Bar
+                        BluetoothStatusBar(
+                            isConnected = currentDevice != null,
+                            deviceName = currentDevice?.name ?: currentDevice?.address,
+                            onClick = onNavigateToBluetooth
+                        )
+                    }
+                }
             }
 
             // 1.2 Tally Automation Profile & Mode Banner (Direct Shortcut to Configuration)

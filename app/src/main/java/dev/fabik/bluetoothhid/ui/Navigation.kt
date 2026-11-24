@@ -43,10 +43,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 import dev.fabik.bluetoothhid.tally.AutomationMode
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import dev.fabik.bluetoothhid.tally.TallyProfileRepository
+import dev.fabik.bluetoothhid.tally.WifiTallyManager
 import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
 
 object Routes {
@@ -244,45 +246,57 @@ fun NavGraph() {
                 // Unbounded channel ensures every barcode result is queued even during active sends
                 val sendQueue = remember { Channel<BarcodeResult>(Channel.UNLIMITED) }
 
-                // Sequential queue processor — handles Mode A, Mode B, Mode C
+                // Sequential queue processor — handles WiFi Mode, Mode A, Mode B, Mode C
                 LaunchedEffect(controller, automationMode, activeProfile) {
+                    val wifiManager = WifiTallyManager.getInstance(context)
                     for (result in sendQueue) {
                         val barcodeType = ZXingAnalyzer.index2String(result.format)
 
-                        when (automationMode) {
-                            AutomationMode.BARCODE_ONLY -> {
-                                controller?.sendString(
-                                    result.text,
-                                    true,
-                                    "SCAN",
-                                    null,
-                                    barcodeType,
-                                    imageName = result.imageName,
-                                    regexGroups = result.regexGroups
-                                )
-                            }
-                            AutomationMode.AUTOMATIC -> {
-                                if (controller != null) {
-                                    TallyAutomationEngine.executeProfileSequence(
-                                        scope = scope,
-                                        barcode = result.text,
-                                        profile = activeProfile,
-                                        controller = controller
-                                    )
-                                } else {
-                                    Toast.makeText(context, "Bluetooth PC not connected!", Toast.LENGTH_SHORT).show()
+                        if (wifiManager.isWifiMode.value) {
+                            // 📶 WIRELESS WIFI TALLY MODE (Zero Bluetooth needed!)
+                            scope.launch {
+                                val (success, msg) = wifiManager.sendBarcode(result.text, activeProfile)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, if (success) "WiFi Tally: $msg" else "WiFi Error: $msg", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            AutomationMode.MANUAL -> {
-                                controller?.sendString(
-                                    result.text,
-                                    true,
-                                    "SCAN",
-                                    null,
-                                    barcodeType,
-                                    imageName = result.imageName,
-                                    regexGroups = result.regexGroups
-                                )
+                        } else {
+                            // ⚡ BLUETOOTH HID MODE
+                            when (automationMode) {
+                                AutomationMode.BARCODE_ONLY -> {
+                                    controller?.sendString(
+                                        result.text,
+                                        true,
+                                        "SCAN",
+                                        null,
+                                        barcodeType,
+                                        imageName = result.imageName,
+                                        regexGroups = result.regexGroups
+                                    )
+                                }
+                                AutomationMode.AUTOMATIC -> {
+                                    if (controller != null) {
+                                        TallyAutomationEngine.executeProfileSequence(
+                                            scope = scope,
+                                            barcode = result.text,
+                                            profile = activeProfile,
+                                            controller = controller
+                                        )
+                                    } else {
+                                        Toast.makeText(context, "Bluetooth PC not connected!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                AutomationMode.MANUAL -> {
+                                    controller?.sendString(
+                                        result.text,
+                                        true,
+                                        "SCAN",
+                                        null,
+                                        barcodeType,
+                                        imageName = result.imageName,
+                                        regexGroups = result.regexGroups
+                                    )
+                                }
                             }
                         }
                     }

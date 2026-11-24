@@ -34,6 +34,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.draw.clip
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
+import dev.fabik.bluetoothhid.tally.WifiTallyManager
+import dev.fabik.bluetoothhid.tally.WifiStatus
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -328,8 +330,9 @@ fun Scanner(
         floatingActionButton = {
             val connectionMode by context.getPreferenceState(PreferenceStore.CONNECTION_MODE)
             val isExternal = connectionMode == ConnectionMode.EXTERNAL.ordinal
-            // External has no Bluetooth device but still needs a manual send button
-            if (currentDevice != null || isExternal) {
+            val isWifiMode by WifiTallyManager.getInstance(context).isWifiMode.collectAsStateWithLifecycle()
+            // External or WiFi has no Bluetooth device but still needs a manual send button
+            if (currentDevice != null || isExternal || isWifiMode) {
                 val clearAfterSend by context.getPreferenceState(PreferenceStore.CLEAR_AFTER_SEND)
 
                 currentResult?.let {
@@ -857,22 +860,47 @@ private fun ScannerAppBar(
                         MaterialTheme.typography.titleLarge
                     }
                 )
-                currentDevice?.let {
+                val wifiManager = remember { WifiTallyManager.getInstance(context) }
+                val isWifiMode by wifiManager.isWifiMode.collectAsStateWithLifecycle()
+                val wifiStatus by wifiManager.wifiStatus.collectAsStateWithLifecycle()
+                val serverIp by wifiManager.serverIp.collectAsStateWithLifecycle()
+
+                if (isWifiMode) {
+                    val statusText = if (wifiStatus == WifiStatus.CONNECTED) "📶 WiFi: Connected ($serverIp)" else "📶 WiFi: ${wifiStatus.name}"
                     Text(
-                        stringResource(R.string.connected_with, it.name ?: it.address),
+                        statusText,
                         style = if (transparent) {
                             MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White,
+                                color = if (wifiStatus == WifiStatus.CONNECTED) Color(0xFF81C784) else Color(0xFFFFB74D),
                                 shadow = textShadow
                             )
                         } else {
-                            MaterialTheme.typography.bodySmall
+                            MaterialTheme.typography.bodySmall.copy(
+                                color = if (wifiStatus == WifiStatus.CONNECTED) Color(0xFF2E7D32) else Color(0xFFE65100)
+                            )
                         }
                     )
+                } else {
+                    currentDevice?.let {
+                        Text(
+                            stringResource(R.string.connected_with, it.name ?: it.address),
+                            style = if (transparent) {
+                                MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White,
+                                    shadow = textShadow
+                                )
+                            } else {
+                                MaterialTheme.typography.bodySmall
+                            }
+                        )
+                    }
                 }
             }
         },
         actions = {
+            val wifiManager = remember { WifiTallyManager.getInstance(context) }
+            val isWifiMode by wifiManager.isWifiMode.collectAsStateWithLifecycle()
+
             // Emergency Stop for running Tally automation sequences
             IconButton(
                 onClick = {
@@ -901,7 +929,7 @@ private fun ScannerAppBar(
                 ToggleFlashButton(camera, info, transparent)
             }
 
-            if (currentDevice != null || isExternal) {
+            if (currentDevice != null || isExternal || isWifiMode) {
                 IconButton(onClick = {
                     keyboardDialog.open()
                 }, Modifier.tooltip(stringResource(R.string.manual_input))) {

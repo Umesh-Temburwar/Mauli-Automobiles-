@@ -82,7 +82,10 @@ import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import dev.fabik.bluetoothhid.tally.TallyProfile
 import dev.fabik.bluetoothhid.tally.TallyProfileRepository
 import dev.fabik.bluetoothhid.tally.TallyStep
+import dev.fabik.bluetoothhid.tally.WifiTallyManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -397,7 +400,15 @@ fun TallyAutomationScreen(
 
                         Button(
                             onClick = {
-                                if (controller?.keyboardSender == null) {
+                                val wifiManager = WifiTallyManager.getInstance(context)
+                                if (wifiManager.isWifiMode.value) {
+                                    scope.launch {
+                                        val (success, msg) = wifiManager.sendBarcode("8904235100018", activeProfile)
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, if (success) "WiFi Tally: $msg" else "WiFi Error: $msg", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else if (controller?.keyboardSender == null) {
                                     Toast.makeText(context, "Connect to Windows PC via Bluetooth first!", Toast.LENGTH_LONG).show()
                                 } else {
                                     TallyAutomationEngine.executeProfileSequence(
