@@ -16,7 +16,7 @@ class MauliDatabase private constructor(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "mauli_barcode.db"
-        const val DATABASE_VERSION = 3
+        const val DATABASE_VERSION = 4
 
         // Tables
         const val TABLE_PDF_DOCUMENTS = "pdf_documents"
@@ -328,6 +328,9 @@ class MauliDatabase private constructor(context: Context) :
         }
         if (oldVersion < 3) {
             createProductsAndImagesTables(db)
+            seedCompleteCatalogue(db)
+        }
+        if (oldVersion < 4) {
             seedCompleteCatalogue(db)
         }
     }
@@ -1181,6 +1184,34 @@ class MauliDatabase private constructor(context: Context) :
                 withImages = cursor.getInt(3)
                 verifiedBc = cursor.getInt(4)
                 categoriesCount = cursor.getInt(5)
+            }
+        }
+
+        if (total < CompleteCatalogueSeeds.PRODUCTS.size) {
+            seedCompleteCatalogue(writableDatabase)
+            // Re-run once after auto-seeding
+            val reloaded = readableDatabase.rawQuery(
+                """
+                SELECT 
+                    COUNT(*),
+                    SUM(CASE WHEN brand LIKE '%Hero%' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN brand = 'Honda' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN original_barcode IS NOT NULL AND original_barcode != '' THEN 1 ELSE 0 END),
+                    COUNT(DISTINCT category)
+                FROM $TABLE_PRODUCTS
+                """.trimIndent(),
+                null
+            )
+            reloaded.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    total = cursor.getInt(0)
+                    hero = cursor.getInt(1)
+                    honda = cursor.getInt(2)
+                    withImages = cursor.getInt(3)
+                    verifiedBc = cursor.getInt(4)
+                    categoriesCount = cursor.getInt(5)
+                }
             }
         }
 
