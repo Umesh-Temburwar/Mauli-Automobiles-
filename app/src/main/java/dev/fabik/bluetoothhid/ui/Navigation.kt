@@ -49,10 +49,12 @@ import dev.fabik.bluetoothhid.tally.AutomationMode
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import dev.fabik.bluetoothhid.tally.TallyProfileRepository
 import dev.fabik.bluetoothhid.tally.WifiTallyManager
+import dev.fabik.bluetoothhid.ui.screens.CustomerDailyScanScreen
 import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
 
 object Routes {
     const val Dashboard = "Dashboard"
+    const val CustomerDailyScan = "CustomerDailyScan"
     const val TallyAutomation = "TallyAutomation"
     const val PdfImport = "PdfImport"
     const val Verification = "Verification/{batchId}"
@@ -123,7 +125,8 @@ fun NavGraph() {
                     onNavigateToDirectSend = { navController.navigate(Routes.directSendRoute(0)) },
                     onNavigateToReports = { navController.navigate(Routes.Reports) },
                     onNavigateToCameraScanner = { navController.navigate(Routes.Main) },
-                    onNavigateToTallyAutomation = { navController.navigate(Routes.TallyAutomation) }
+                    onNavigateToTallyAutomation = { navController.navigate(Routes.TallyAutomation) },
+                    onNavigateToCustomerDailyScan = { navController.navigate(Routes.CustomerDailyScan) }
                 )
 
                 // Confirm back presses to exit the app from Dashboard
@@ -211,6 +214,12 @@ fun NavGraph() {
                     onSelectBatch = { selectedBatchId ->
                         navController.navigate(Routes.verificationRoute(selectedBatchId))
                     }
+                )
+            }
+
+            composable(Routes.CustomerDailyScan) {
+                CustomerDailyScanScreen(
+                    onNavigateBack = { navController.navigateUp() }
                 )
             }
 

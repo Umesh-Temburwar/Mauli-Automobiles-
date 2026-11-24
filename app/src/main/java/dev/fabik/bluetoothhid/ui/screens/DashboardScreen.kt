@@ -69,8 +69,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.fabik.bluetoothhid.LocalController
 import dev.fabik.bluetoothhid.R
 import dev.fabik.bluetoothhid.SettingsActivity
+import dev.fabik.bluetoothhid.data.CustomerScansSummary
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.data.SummaryStats
+import androidx.compose.material.icons.filled.ShoppingCart
 
 import dev.fabik.bluetoothhid.tally.AutomationMode
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
@@ -105,7 +107,8 @@ fun DashboardScreen(
     onNavigateToDirectSend: () -> Unit,
     onNavigateToReports: () -> Unit,
     onNavigateToCameraScanner: () -> Unit,
-    onNavigateToTallyAutomation: () -> Unit = {}
+    onNavigateToTallyAutomation: () -> Unit = {},
+    onNavigateToCustomerDailyScan: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val controller = LocalController.current
@@ -128,10 +131,13 @@ fun DashboardScreen(
     var editIpText by remember(serverIp) { mutableStateOf(serverIp) }
 
     var stats by remember { mutableStateOf(SummaryStats()) }
+    var customerScansSummary by remember { mutableStateOf(CustomerScansSummary()) }
 
     LaunchedEffect(Unit) {
         val db = MauliDatabase.getInstance(context)
+        db.ensureMasterCatalogueSeeded()
         stats = db.getSummaryStats()
+        customerScansSummary = db.getCustomerScansSummary()
     }
 
     if (showIpDialog) {
@@ -516,6 +522,105 @@ fun DashboardScreen(
                             tint = Color.Yellow,
                             modifier = Modifier.size(26.dp)
                         )
+                    }
+                }
+            }
+
+            // 1.6 Customer Daily Spares & Night PDF Report (Hero Honda Master Database)
+            item {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToCustomerDailyScan() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFF0F766E)
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.22f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.ShoppingCart,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "🛒 Customer Spares & Night PDF",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    "ग्राहक विक्री बारकोड स्कॅन व रात्रीचा PDF अहवाल",
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Icon(
+                                Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Status badge inside card
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.22f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (customerScansSummary.totalRecords > 0) {
+                                        "आजची विक्री: ${customerScansSummary.totalRecords} पार्ट (${customerScansSummary.totalQuantity} pcs)"
+                                    } else {
+                                        "Hero & Honda 50+ Master Spares Loaded"
+                                    },
+                                    color = Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = if (customerScansSummary.totalAmount > 0) {
+                                        "₹${"%.2f".format(customerScansSummary.totalAmount)}"
+                                    } else {
+                                        "OPEN SCANNER ›"
+                                    },
+                                    color = Color(0xFFFDE047),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }

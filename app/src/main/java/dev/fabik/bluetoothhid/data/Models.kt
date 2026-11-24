@@ -48,3 +48,35 @@ data class SummaryStats(
     val totalPending: Int = 0,
     val totalDuplicates: Int = 0
 )
+
+data class MasterSparePart(
+    val id: Long = 0,
+    val brand: String,
+    val partNumber: String,
+    val productName: String,
+    val barcode: String,
+    val category: String,
+    val compatibleModels: String,
+    val mrp: Double = 0.0
+)
+
+data class CustomerScanRecord(
+    val id: Long = 0,
+    val barcode: String,
+    val productName: String,
+    val partNumber: String,
+    val brand: String,
+    val quantity: Int = 1,
+    val mrp: Double = 0.0,
+    val scanTime: Long = System.currentTimeMillis(),
+    val dateStr: String, // "yyyy-MM-dd"
+    val customerName: String = "",
+    val notes: String = ""
+)
+
+data class CustomerScansSummary(
+    val totalRecords: Int = 0,
+    val totalQuantity: Int = 0,
+    val totalAmount: Double = 0.0,
+    val uniqueBarcodes: Int = 0
+)
