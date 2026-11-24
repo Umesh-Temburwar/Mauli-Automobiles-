@@ -69,10 +69,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.fabik.bluetoothhid.LocalController
 import dev.fabik.bluetoothhid.R
 import dev.fabik.bluetoothhid.SettingsActivity
+import dev.fabik.bluetoothhid.data.CatalogueStats
 import dev.fabik.bluetoothhid.data.CustomerScansSummary
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.data.SummaryStats
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Search
 
 import dev.fabik.bluetoothhid.tally.AutomationMode
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
@@ -108,7 +111,8 @@ fun DashboardScreen(
     onNavigateToReports: () -> Unit,
     onNavigateToCameraScanner: () -> Unit,
     onNavigateToTallyAutomation: () -> Unit = {},
-    onNavigateToCustomerDailyScan: () -> Unit = {}
+    onNavigateToCustomerDailyScan: () -> Unit = {},
+    onNavigateToCatalogue: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val controller = LocalController.current
@@ -132,12 +136,15 @@ fun DashboardScreen(
 
     var stats by remember { mutableStateOf(SummaryStats()) }
     var customerScansSummary by remember { mutableStateOf(CustomerScansSummary()) }
+    var catalogueStats by remember { mutableStateOf(CatalogueStats()) }
 
     LaunchedEffect(Unit) {
         val db = MauliDatabase.getInstance(context)
         db.ensureMasterCatalogueSeeded()
+        db.ensureCompleteCatalogueSeeded()
         stats = db.getSummaryStats()
         customerScansSummary = db.getCustomerScansSummary()
+        catalogueStats = db.getCatalogueStats()
     }
 
     if (showIpDialog) {
@@ -616,6 +623,96 @@ fun DashboardScreen(
                                         "OPEN SCANNER ›"
                                     },
                                     color = Color(0xFFFDE047),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 1.7 Spare Parts Master Catalogue with Images
+            item {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToCatalogue() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFF1E3A8A)
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.22f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.GridView,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "🏍️ Spare Parts Master Catalogue",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    "पार्ट्सचे फोटो, ओरिजिनल बारकोड व बाईक मॉडेल लिस्ट",
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.24f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${catalogueStats.totalProducts} Verified OEM Parts • Hero & Honda",
+                                    color = Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "OPEN CATALOGUE ›",
+                                    color = Color(0xFF67E8F9),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )

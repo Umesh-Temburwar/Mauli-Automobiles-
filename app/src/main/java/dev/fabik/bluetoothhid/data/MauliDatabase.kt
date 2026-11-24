@@ -16,7 +16,7 @@ class MauliDatabase private constructor(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "mauli_barcode.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
 
         // Tables
         const val TABLE_PDF_DOCUMENTS = "pdf_documents"
@@ -25,6 +25,8 @@ class MauliDatabase private constructor(context: Context) :
         const val TABLE_SCAN_HISTORY = "scan_history"
         const val TABLE_MASTER_PARTS = "master_parts"
         const val TABLE_CUSTOMER_SCANS = "customer_scans"
+        const val TABLE_PRODUCTS = "products"
+        const val TABLE_PRODUCT_IMAGES = "product_images"
 
         fun getTodayDateString(): String =
             SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -102,6 +104,10 @@ class MauliDatabase private constructor(context: Context) :
         // Create Master Parts and Customer Scans tables
         createMasterAndCustomerTables(db)
         seedMasterPartsInternal(db)
+
+        // Create Complete Products and Dedicated Images tables
+        createProductsAndImagesTables(db)
+        seedCompleteCatalogue(db)
     }
 
     private fun createMasterAndCustomerTables(db: SQLiteDatabase) {
@@ -144,6 +150,79 @@ class MauliDatabase private constructor(context: Context) :
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_cust_scans_barcode ON $TABLE_CUSTOMER_SCANS (barcode)")
     }
 
+    private fun createProductsAndImagesTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_PRODUCTS (
+                id INTEGER PRIMARY KEY,
+                product_name TEXT NOT NULL,
+                product_description TEXT,
+                manufacturer TEXT NOT NULL,
+                brand TEXT NOT NULL,
+                oem_part_number TEXT NOT NULL,
+                alternative_part_number TEXT,
+                superseded_part_number TEXT,
+                original_barcode TEXT,
+                barcode_type TEXT DEFAULT 'EAN_13',
+                gtin TEXT,
+                ean13 TEXT,
+                internal_barcode TEXT,
+                category TEXT NOT NULL,
+                subcategory TEXT,
+                vehicle_model TEXT NOT NULL,
+                manufacturing_year TEXT,
+                mrp REAL NOT NULL,
+                selling_price REAL NOT NULL,
+                currency TEXT DEFAULT 'INR',
+                hsn_code TEXT,
+                gst_rate REAL,
+                unit TEXT DEFAULT 'PCS',
+                image_url TEXT,
+                thumbnail_url TEXT,
+                local_image_path TEXT,
+                official_product_url TEXT,
+                image_verification_status TEXT,
+                barcode_verification_status TEXT,
+                data_source TEXT,
+                last_verified_at TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_PRODUCT_IMAGES (
+                image_id INTEGER PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                oem_part_number TEXT NOT NULL,
+                barcode TEXT,
+                brand TEXT NOT NULL,
+                image_url TEXT NOT NULL,
+                thumbnail_url TEXT,
+                official_product_page_url TEXT,
+                image_source_name TEXT,
+                image_format TEXT,
+                image_file_size INTEGER,
+                is_primary_image INTEGER DEFAULT 1,
+                is_verified INTEGER DEFAULT 1,
+                verification_method TEXT,
+                local_image_path TEXT
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_prod_barcode ON $TABLE_PRODUCTS (original_barcode)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_prod_partno ON $TABLE_PRODUCTS (oem_part_number)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_prod_brand ON $TABLE_PRODUCTS (brand)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_prod_category ON $TABLE_PRODUCTS (category)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_prod_model ON $TABLE_PRODUCTS (vehicle_model)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_img_prodid ON $TABLE_PRODUCT_IMAGES (product_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_img_partno ON $TABLE_PRODUCT_IMAGES (oem_part_number)")
+    }
+
     private fun seedMasterPartsInternal(db: SQLiteDatabase) {
         try {
             db.beginTransaction()
@@ -169,10 +248,87 @@ class MauliDatabase private constructor(context: Context) :
         }
     }
 
+    private fun seedCompleteCatalogue(db: SQLiteDatabase) {
+        try {
+            db.beginTransaction()
+            for (p in CompleteCatalogueSeeds.PRODUCTS) {
+                val cv = ContentValues().apply {
+                    put("id", p.id)
+                    put("product_name", p.productName)
+                    put("product_description", p.productDescription)
+                    put("manufacturer", p.manufacturer)
+                    put("brand", p.brand)
+                    put("oem_part_number", p.oemPartNumber)
+                    put("alternative_part_number", p.alternativePartNumber)
+                    put("superseded_part_number", p.supersededPartNumber)
+                    put("original_barcode", p.originalBarcode)
+                    put("barcode_type", p.barcodeType)
+                    put("gtin", p.gtin)
+                    put("ean13", p.ean13)
+                    put("internal_barcode", p.internalBarcode)
+                    put("category", p.category)
+                    put("subcategory", p.subcategory)
+                    put("vehicle_model", p.vehicleModel)
+                    put("manufacturing_year", p.manufacturingYear)
+                    put("mrp", p.mrp)
+                    put("selling_price", p.sellingPrice)
+                    put("currency", p.currency)
+                    put("hsn_code", p.hsnCode)
+                    put("gst_rate", p.gstRate)
+                    put("unit", p.unit)
+                    put("image_url", p.imageUrl)
+                    put("thumbnail_url", p.thumbnailUrl)
+                    put("local_image_path", p.localImagePath)
+                    put("official_product_url", p.officialProductUrl)
+                    put("image_verification_status", p.imageVerificationStatus)
+                    put("barcode_verification_status", p.barcodeVerificationStatus)
+                    put("data_source", p.dataSource)
+                    put("last_verified_at", p.lastVerifiedAt)
+                    put("created_at", System.currentTimeMillis().toString())
+                    put("updated_at", System.currentTimeMillis().toString())
+                }
+                db.insertWithOnConflict(TABLE_PRODUCTS, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+
+            for (img in CompleteCatalogueSeeds.IMAGES) {
+                val cv = ContentValues().apply {
+                    put("image_id", img.imageId)
+                    put("product_id", img.productId)
+                    put("product_name", img.productName)
+                    put("oem_part_number", img.oemPartNumber)
+                    put("barcode", img.barcode)
+                    put("brand", img.brand)
+                    put("image_url", img.imageUrl)
+                    put("thumbnail_url", img.thumbnailUrl)
+                    put("official_product_page_url", img.officialProductPageUrl)
+                    put("image_source_name", img.imageSourceName)
+                    put("image_format", img.imageFormat)
+                    put("image_file_size", img.imageFileSize)
+                    put("is_primary_image", if (img.isPrimaryImage) 1 else 0)
+                    put("is_verified", if (img.isVerified) 1 else 0)
+                    put("verification_method", img.verificationMethod)
+                    put("local_image_path", img.localImagePath)
+                }
+                db.insertWithOnConflict(TABLE_PRODUCT_IMAGES, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            db.setTransactionSuccessful()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            if (db.inTransaction()) {
+                db.endTransaction()
+            }
+        }
+    }
+
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             createMasterAndCustomerTables(db)
             seedMasterPartsInternal(db)
+        }
+        if (oldVersion < 3) {
+            createProductsAndImagesTables(db)
+            seedCompleteCatalogue(db)
         }
     }
 
@@ -568,7 +724,7 @@ class MauliDatabase private constructor(context: Context) :
             arrayOf(cleanBarcode)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
-                MasterSparePart(
+                return@withContext MasterSparePart(
                     id = cursor.getLong(0),
                     brand = cursor.getString(1),
                     partNumber = cursor.getString(2),
@@ -578,8 +734,28 @@ class MauliDatabase private constructor(context: Context) :
                     compatibleModels = cursor.getString(6),
                     mrp = cursor.getDouble(7)
                 )
-            } else null
+            }
         }
+
+        // Check TABLE_PRODUCTS for complete catalogue
+        readableDatabase.rawQuery(
+            "SELECT id, brand, oem_part_number, product_name, original_barcode, category, vehicle_model, mrp FROM $TABLE_PRODUCTS WHERE original_barcode = ? OR gtin = ? OR ean13 = ? LIMIT 1",
+            arrayOf(cleanBarcode, cleanBarcode, cleanBarcode)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                return@withContext MasterSparePart(
+                    id = cursor.getLong(0),
+                    brand = cursor.getString(1),
+                    partNumber = cursor.getString(2),
+                    productName = cursor.getString(3),
+                    barcode = cursor.getString(4),
+                    category = cursor.getString(5),
+                    compatibleModels = cursor.getString(6),
+                    mrp = cursor.getDouble(7)
+                )
+            }
+        }
+        null
     }
 
     suspend fun searchMasterParts(query: String): List<MasterSparePart> = withContext(Dispatchers.IO) {
@@ -819,4 +995,314 @@ class MauliDatabase private constructor(context: Context) :
             uniqueBarcodes = uniqueBarcodes
         )
     }
+
+    /* -------------------- COMPLETE PRODUCTS & IMAGES CATALOGUE -------------------- */
+
+    suspend fun ensureCompleteCatalogueSeeded() = withContext(Dispatchers.IO) {
+        val count = readableDatabase.rawQuery("SELECT COUNT(*) FROM $TABLE_PRODUCTS", null).use {
+            if (it.moveToFirst()) it.getInt(0) else 0
+        }
+        if (count == 0) {
+            seedCompleteCatalogue(writableDatabase)
+        }
+    }
+
+    suspend fun findProductByBarcode(barcode: String): MasterProduct? = withContext(Dispatchers.IO) {
+        val cleanBarcode = barcode.trim()
+        readableDatabase.rawQuery(
+            """
+            SELECT id, product_name, product_description, manufacturer, brand, oem_part_number, 
+                   alternative_part_number, superseded_part_number, original_barcode, barcode_type, 
+                   gtin, ean13, internal_barcode, category, subcategory, vehicle_model, manufacturing_year, 
+                   mrp, selling_price, currency, hsn_code, gst_rate, unit, image_url, thumbnail_url, 
+                   local_image_path, official_product_url, image_verification_status, barcode_verification_status, 
+                   data_source, last_verified_at 
+            FROM $TABLE_PRODUCTS 
+            WHERE original_barcode = ? OR gtin = ? OR ean13 = ? OR internal_barcode = ?
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(cleanBarcode, cleanBarcode, cleanBarcode, cleanBarcode)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursorToProduct(cursor) else null
+        }
+    }
+
+    suspend fun findProductByPartNumber(partNo: String): MasterProduct? = withContext(Dispatchers.IO) {
+        val cleanPartNo = partNo.trim().replace(" ", "").uppercase()
+        readableDatabase.rawQuery(
+            """
+            SELECT id, product_name, product_description, manufacturer, brand, oem_part_number, 
+                   alternative_part_number, superseded_part_number, original_barcode, barcode_type, 
+                   gtin, ean13, internal_barcode, category, subcategory, vehicle_model, manufacturing_year, 
+                   mrp, selling_price, currency, hsn_code, gst_rate, unit, image_url, thumbnail_url, 
+                   local_image_path, official_product_url, image_verification_status, barcode_verification_status, 
+                   data_source, last_verified_at 
+            FROM $TABLE_PRODUCTS 
+            WHERE UPPER(REPLACE(oem_part_number, ' ', '')) = ? 
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(cleanPartNo)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursorToProduct(cursor) else null
+        }
+    }
+
+    suspend fun searchProducts(
+        query: String,
+        brandFilter: String? = null,
+        categoryFilter: String? = null,
+        modelFilter: String? = null,
+        withImagesOnly: Boolean = false
+    ): List<MasterProduct> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<MasterProduct>()
+        val cleanQuery = "%${query.trim()}%"
+        val whereClauses = mutableListOf<String>()
+        val args = mutableListOf<String>()
+
+        if (query.isNotBlank()) {
+            whereClauses.add("(product_name LIKE ? OR oem_part_number LIKE ? OR original_barcode LIKE ? OR vehicle_model LIKE ?)")
+            args.add(cleanQuery)
+            args.add(cleanQuery)
+            args.add(cleanQuery)
+            args.add(cleanQuery)
+        }
+
+        if (!brandFilter.isNullOrBlank() && brandFilter != "All") {
+            whereClauses.add("brand = ?")
+            args.add(brandFilter)
+        }
+
+        if (!categoryFilter.isNullOrBlank() && categoryFilter != "All") {
+            whereClauses.add("category = ?")
+            args.add(categoryFilter)
+        }
+
+        if (!modelFilter.isNullOrBlank() && modelFilter != "All") {
+            whereClauses.add("vehicle_model LIKE ?")
+            args.add("%$modelFilter%")
+        }
+
+        if (withImagesOnly) {
+            whereClauses.add("(image_url IS NOT NULL AND image_url != '')")
+        }
+
+        val whereSql = if (whereClauses.isNotEmpty()) "WHERE " + whereClauses.joinToString(" AND ") else ""
+        val sql = """
+            SELECT id, product_name, product_description, manufacturer, brand, oem_part_number, 
+                   alternative_part_number, superseded_part_number, original_barcode, barcode_type, 
+                   gtin, ean13, internal_barcode, category, subcategory, vehicle_model, manufacturing_year, 
+                   mrp, selling_price, currency, hsn_code, gst_rate, unit, image_url, thumbnail_url, 
+                   local_image_path, official_product_url, image_verification_status, barcode_verification_status, 
+                   data_source, last_verified_at 
+            FROM $TABLE_PRODUCTS 
+            $whereSql
+            ORDER BY brand ASC, product_name ASC
+            LIMIT 100
+        """.trimIndent()
+
+        readableDatabase.rawQuery(sql, if (args.isNotEmpty()) args.toTypedArray() else null).use { cursor ->
+            while (cursor.moveToNext()) {
+                list.add(cursorToProduct(cursor))
+            }
+        }
+        list
+    }
+
+    suspend fun getProductImages(productId: Long): List<ProductImageRecord> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<ProductImageRecord>()
+        readableDatabase.rawQuery(
+            """
+            SELECT image_id, product_id, product_name, oem_part_number, barcode, brand, 
+                   image_url, thumbnail_url, official_product_page_url, image_source_name, 
+                   image_format, image_file_size, is_primary_image, is_verified, 
+                   verification_method, local_image_path 
+            FROM $TABLE_PRODUCT_IMAGES 
+            WHERE product_id = ? 
+            ORDER BY is_primary_image DESC, image_id ASC
+            """.trimIndent(),
+            arrayOf(productId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                list.add(cursorToProductImage(cursor))
+            }
+        }
+        list
+    }
+
+    suspend fun getAllProducts(limit: Int = 100, offset: Int = 0): List<MasterProduct> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<MasterProduct>()
+        readableDatabase.rawQuery(
+            """
+            SELECT id, product_name, product_description, manufacturer, brand, oem_part_number, 
+                   alternative_part_number, superseded_part_number, original_barcode, barcode_type, 
+                   gtin, ean13, internal_barcode, category, subcategory, vehicle_model, manufacturing_year, 
+                   mrp, selling_price, currency, hsn_code, gst_rate, unit, image_url, thumbnail_url, 
+                   local_image_path, official_product_url, image_verification_status, barcode_verification_status, 
+                   data_source, last_verified_at 
+            FROM $TABLE_PRODUCTS 
+            ORDER BY brand ASC, product_name ASC 
+            LIMIT ? OFFSET ?
+            """.trimIndent(),
+            arrayOf(limit.toString(), offset.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                list.add(cursorToProduct(cursor))
+            }
+        }
+        list
+    }
+
+    suspend fun getCatalogueStats(): CatalogueStats = withContext(Dispatchers.IO) {
+        var total = 0
+        var hero = 0
+        var honda = 0
+        var withImages = 0
+        var verifiedBc = 0
+        var categoriesCount = 0
+
+        val db = readableDatabase
+        db.rawQuery(
+            """
+            SELECT 
+                COUNT(*),
+                SUM(CASE WHEN brand LIKE '%Hero%' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN brand = 'Honda' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN original_barcode IS NOT NULL AND original_barcode != '' THEN 1 ELSE 0 END),
+                COUNT(DISTINCT category)
+            FROM $TABLE_PRODUCTS
+            """.trimIndent(),
+            null
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                total = cursor.getInt(0)
+                hero = cursor.getInt(1)
+                honda = cursor.getInt(2)
+                withImages = cursor.getInt(3)
+                verifiedBc = cursor.getInt(4)
+                categoriesCount = cursor.getInt(5)
+            }
+        }
+
+        CatalogueStats(
+            totalProducts = total,
+            heroProducts = hero,
+            hondaProducts = honda,
+            productsWithImages = withImages,
+            verifiedBarcodes = verifiedBc,
+            totalCategories = categoriesCount
+        )
+    }
+
+    suspend fun insertProduct(p: MasterProduct): Long = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("product_name", p.productName)
+            put("product_description", p.productDescription)
+            put("manufacturer", p.manufacturer)
+            put("brand", p.brand)
+            put("oem_part_number", p.oemPartNumber)
+            put("alternative_part_number", p.alternativePartNumber)
+            put("superseded_part_number", p.supersededPartNumber)
+            put("original_barcode", p.originalBarcode)
+            put("barcode_type", p.barcodeType)
+            put("gtin", p.gtin)
+            put("ean13", p.ean13)
+            put("internal_barcode", p.internalBarcode)
+            put("category", p.category)
+            put("subcategory", p.subcategory)
+            put("vehicle_model", p.vehicleModel)
+            put("manufacturing_year", p.manufacturingYear)
+            put("mrp", p.mrp)
+            put("selling_price", p.sellingPrice)
+            put("currency", p.currency)
+            put("hsn_code", p.hsnCode)
+            put("gst_rate", p.gstRate)
+            put("unit", p.unit)
+            put("image_url", p.imageUrl)
+            put("thumbnail_url", p.thumbnailUrl)
+            put("local_image_path", p.localImagePath)
+            put("official_product_url", p.officialProductUrl)
+            put("image_verification_status", p.imageVerificationStatus)
+            put("barcode_verification_status", p.barcodeVerificationStatus)
+            put("data_source", p.dataSource)
+            put("last_verified_at", p.lastVerifiedAt)
+            put("created_at", System.currentTimeMillis().toString())
+            put("updated_at", System.currentTimeMillis().toString())
+        }
+        writableDatabase.insert(TABLE_PRODUCTS, null, cv)
+    }
+
+    suspend fun insertProductImage(img: ProductImageRecord): Long = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("product_id", img.productId)
+            put("product_name", img.productName)
+            put("oem_part_number", img.oemPartNumber)
+            put("barcode", img.barcode)
+            put("brand", img.brand)
+            put("image_url", img.imageUrl)
+            put("thumbnail_url", img.thumbnailUrl)
+            put("official_product_page_url", img.officialProductPageUrl)
+            put("image_source_name", img.imageSourceName)
+            put("image_format", img.imageFormat)
+            put("image_file_size", img.imageFileSize)
+            put("is_primary_image", if (img.isPrimaryImage) 1 else 0)
+            put("is_verified", if (img.isVerified) 1 else 0)
+            put("verification_method", img.verificationMethod)
+            put("local_image_path", img.localImagePath)
+        }
+        writableDatabase.insert(TABLE_PRODUCT_IMAGES, null, cv)
+    }
+
+    private fun cursorToProduct(cursor: Cursor) = MasterProduct(
+        id = cursor.getLong(0),
+        productName = cursor.getString(1),
+        productDescription = cursor.getString(2) ?: "",
+        manufacturer = cursor.getString(3),
+        brand = cursor.getString(4),
+        oemPartNumber = cursor.getString(5),
+        alternativePartNumber = cursor.getString(6) ?: "",
+        supersededPartNumber = cursor.getString(7) ?: "",
+        originalBarcode = cursor.getString(8) ?: "",
+        barcodeType = cursor.getString(9) ?: "EAN_13",
+        gtin = cursor.getString(10) ?: "",
+        ean13 = cursor.getString(11) ?: "",
+        internalBarcode = cursor.getString(12) ?: "",
+        category = cursor.getString(13),
+        subcategory = cursor.getString(14) ?: "",
+        vehicleModel = cursor.getString(15),
+        manufacturingYear = cursor.getString(16) ?: "",
+        mrp = cursor.getDouble(17),
+        sellingPrice = cursor.getDouble(18),
+        currency = cursor.getString(19) ?: "INR",
+        hsnCode = cursor.getString(20) ?: "",
+        gstRate = cursor.getDouble(21),
+        unit = cursor.getString(22) ?: "PCS",
+        imageUrl = cursor.getString(23) ?: "",
+        thumbnailUrl = cursor.getString(24) ?: "",
+        localImagePath = cursor.getString(25) ?: "",
+        officialProductUrl = cursor.getString(26) ?: "",
+        imageVerificationStatus = cursor.getString(27) ?: "",
+        barcodeVerificationStatus = cursor.getString(28) ?: "",
+        dataSource = cursor.getString(29) ?: "",
+        lastVerifiedAt = cursor.getString(30) ?: ""
+    )
+
+    private fun cursorToProductImage(cursor: Cursor) = ProductImageRecord(
+        imageId = cursor.getLong(0),
+        productId = cursor.getLong(1),
+        productName = cursor.getString(2),
+        oemPartNumber = cursor.getString(3),
+        barcode = cursor.getString(4) ?: "",
+        brand = cursor.getString(5),
+        imageUrl = cursor.getString(6),
+        thumbnailUrl = cursor.getString(7) ?: "",
+        officialProductPageUrl = cursor.getString(8) ?: "",
+        imageSourceName = cursor.getString(9) ?: "",
+        imageFormat = cursor.getString(10) ?: "PNG",
+        imageFileSize = cursor.getLong(11),
+        isPrimaryImage = cursor.getInt(12) == 1,
+        isVerified = cursor.getInt(13) == 1,
+        verificationMethod = cursor.getString(14) ?: "",
+        localImagePath = cursor.getString(15) ?: ""
+    )
 }
