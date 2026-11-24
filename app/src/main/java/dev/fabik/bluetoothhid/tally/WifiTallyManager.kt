@@ -19,6 +19,7 @@ import java.net.DatagramSocket
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.URL
+import java.util.UUID
 
 enum class WifiStatus {
     DISCONNECTED,
@@ -28,9 +29,14 @@ enum class WifiStatus {
 }
 
 /**
- * Manages wireless WiFi communication directly with TallyPrime on the PC.
- * Eliminates the need for Bluetooth pairing or Bluetooth HID drivers.
- * Supports auto-discovery via UDP broadcast on port 8888 and HTTP communication on port 8080.
+ * Manages wireless Wi-Fi communication directly with TallyPrime on the PC.
+ * Eliminates the need for Bluetooth pairing, Bluetooth drivers, or manual daily setup.
+ *
+ * Features:
+ * - Auto-discovery via UDP broadcast on port 8888 (handles router reboots & dynamic IP changes).
+ * - Automatic retry with re-discovery if the PC's IP address changes.
+ * - UUID-based duplicate scan protection.
+ * - Verified delivery acknowledgement directly from Tally receiver.
  */
 class WifiTallyManager private constructor(private val context: Context) {
 
@@ -71,7 +77,7 @@ class WifiTallyManager private constructor(private val context: Context) {
     private val _pcHostname = MutableStateFlow<String?>(null)
     val pcHostname = _pcHostname.asStateFlow()
 
-    private val _lastMessage = MutableStateFlow("Tap 'Auto-Detect' to connect to PC over WiFi")
+    private val _lastMessage = MutableStateFlow("Tap 'Auto-Detect' to connect to PC over Wi-Fi")
     val lastMessage = _lastMessage.asStateFlow()
 
     init {
@@ -103,65 +109,68 @@ class WifiTallyManager private constructor(private val context: Context) {
     }
 
     /**
+     * Executes a fast, synchronous UDP discovery broadcast on port 8888.
+     * Updates _serverIp and returns true if PC responded.
+     */
+    private fun runUdpDiscoverySync(): Boolean {
+        var multicastLock: WifiManager.MulticastLock? = null
+        var socket: DatagramSocket? = null
+        return try {
+            val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            multicastLock = wifiManager?.createMulticastLock("MauliTallyDiscovery")
+            multicastLock?.acquire()
+
+            socket = DatagramSocket()
+            socket.broadcast = true
+            socket.soTimeout = 2000
+
+            val sendData = "MAULI_TALLY_DISCOVER".toByteArray()
+            val broadcastAddr = InetAddress.getByName("255.255.255.255")
+            val sendPacket = DatagramPacket(sendData, sendData.size, broadcastAddr, UDP_DISCOVERY_PORT)
+
+            socket.send(sendPacket)
+
+            val recvBuf = ByteArray(1024)
+            val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
+            socket.receive(recvPacket)
+
+            val respJson = String(recvPacket.data, 0, recvPacket.length)
+            val json = JSONObject(respJson)
+
+            val discoveredIp = recvPacket.address.hostAddress ?: json.optString("ip", _serverIp.value)
+            val hostname = json.optString("hostname", "Mauli PC")
+            val port = json.optInt("port", DEFAULT_PORT)
+
+            _serverIp.value = discoveredIp
+            _serverPort.value = port
+            _pcHostname.value = hostname
+            _wifiStatus.value = WifiStatus.CONNECTED
+            _lastMessage.value = "Connected to $hostname ($discoveredIp)"
+
+            prefs.edit().putString(KEY_SERVER_IP, discoveredIp).putInt(KEY_SERVER_PORT, port).apply()
+            true
+        } catch (e: Exception) {
+            Log.d(TAG, "UDP broadcast discovery failed: ${e.message}")
+            false
+        } finally {
+            try { socket?.close() } catch (ignored: Exception) {}
+            try { multicastLock?.release() } catch (ignored: Exception) {}
+        }
+    }
+
+    /**
      * Auto-discovers PC via UDP broadcast, or falls back to pinging current/default IP.
      */
     fun discoverPc(scope: CoroutineScope, onResult: ((Boolean, String) -> Unit)? = null) {
         scope.launch(Dispatchers.IO) {
             _wifiStatus.value = WifiStatus.SEARCHING
-            _lastMessage.value = "Searching for PC on WiFi network..."
+            _lastMessage.value = "Searching for PC on Wi-Fi network..."
 
-            var found = false
-            var errorDetail = ""
+            var found = runUdpDiscoverySync()
 
-            // 1. Try UDP Broadcast Discovery
-            try {
-                val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                val multicastLock = wifiManager?.createMulticastLock("MauliTallyDiscovery")
-                multicastLock?.acquire()
-
-                val socket = DatagramSocket()
-                socket.broadcast = true
-                socket.soTimeout = 2500
-
-                val sendData = "MAULI_TALLY_DISCOVER".toByteArray()
-                val broadcastAddr = InetAddress.getByName("255.255.255.255")
-                val sendPacket = DatagramPacket(sendData, sendData.size, broadcastAddr, UDP_DISCOVERY_PORT)
-
-                socket.send(sendPacket)
-
-                val recvBuf = ByteArray(1024)
-                val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
-                socket.receive(recvPacket)
-
-                val respJson = String(recvPacket.data, 0, recvPacket.length)
-                val json = JSONObject(respJson)
-
-                val discoveredIp = recvPacket.address.hostAddress ?: json.optString("ip", _serverIp.value)
-                val hostname = json.optString("hostname", "Mauli PC")
-                val port = json.optInt("port", DEFAULT_PORT)
-
-                _serverIp.value = discoveredIp
-                _serverPort.value = port
-                _pcHostname.value = hostname
-                _wifiStatus.value = WifiStatus.CONNECTED
-                _lastMessage.value = "Connected to $hostname ($discoveredIp)"
-
-                prefs.edit().putString(KEY_SERVER_IP, discoveredIp).putInt(KEY_SERVER_PORT, port).apply()
-                found = true
-
-                socket.close()
-                multicastLock?.release()
-            } catch (e: Exception) {
-                Log.d(TAG, "UDP discovery did not get reply: ${e.message}, falling back to direct ping...")
-                errorDetail = e.message ?: "UDP timeout"
-            }
-
-            // 2. Fallback: Ping saved IP directly
+            // Fallback: Ping saved IP directly
             if (!found) {
-                val pingSuccess = pingServerInternal(_serverIp.value)
-                if (pingSuccess) {
-                    found = true
-                }
+                found = pingServerInternal(_serverIp.value)
             }
 
             withContext(Dispatchers.Main) {
@@ -169,7 +178,7 @@ class WifiTallyManager private constructor(private val context: Context) {
                     onResult?.invoke(true, _lastMessage.value)
                 } else {
                     _wifiStatus.value = WifiStatus.FAILED
-                    _lastMessage.value = "PC not found! Ensure START_TALLY_WIFI_SERVER.bat is running on PC."
+                    _lastMessage.value = "PC not found! Ensure MauliTallyReceiver.exe is running on PC."
                     onResult?.invoke(false, _lastMessage.value)
                 }
             }
@@ -222,40 +231,33 @@ class WifiTallyManager private constructor(private val context: Context) {
             }
         } catch (e: Exception) {
             _wifiStatus.value = WifiStatus.FAILED
-            _lastMessage.value = "Cannot reach $ip. Is PC server running?"
+            _lastMessage.value = "Cannot reach $ip. Is PC receiver running?"
             false
         }
     }
 
     /**
-     * Sends barcode and current Tally sequence steps to the PC over WiFi.
-     * The PC types the barcode and shortcuts directly into the active TallyPrime window.
+     * Internal helper to send the barcode payload over HTTP.
      */
-    suspend fun sendBarcode(
+    private fun sendHttpScan(
+        ip: String,
         barcode: String,
         profile: TallyProfile?,
-        onResult: ((Boolean, String) -> Unit)? = null
-    ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-        if (!_isWifiMode.value) {
-            val msg = "WiFi mode is disabled"
-            withContext(Dispatchers.Main) { onResult?.invoke(false, msg) }
-            return@withContext Pair(false, msg)
-        }
-
-        val ip = _serverIp.value
-        val port = _serverPort.value
-        val url = URL("http://$ip:$port/api/tally/scan")
-
-        try {
+        scanId: String
+    ): Pair<Boolean, String> {
+        return try {
+            val port = _serverPort.value
+            val url = URL("http://$ip:$port/api/tally/scan")
             val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 4000
+            conn.connectTimeout = 2500
+            conn.readTimeout = 3500
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
             conn.doOutput = true
 
             val payload = JSONObject()
             payload.put("barcode", barcode)
+            payload.put("scan_id", scanId)
             payload.put("profile", profile?.name ?: "Purchase Entry")
 
             if (profile != null && profile.steps.isNotEmpty()) {
@@ -290,22 +292,61 @@ class WifiTallyManager private constructor(private val context: Context) {
                 reader.close()
 
                 _wifiStatus.value = WifiStatus.CONNECTED
-                val successMsg = "Tally entered: $barcode (${profile?.name ?: "Direct"})"
+                val successMsg = "Delivered into TallyPrime: $barcode"
                 _lastMessage.value = successMsg
-                withContext(Dispatchers.Main) { onResult?.invoke(true, successMsg) }
                 Pair(true, successMsg)
             } else {
-                val errMsg = "Server error ($responseCode)"
+                val errMsg = "PC Server error ($responseCode)"
                 _lastMessage.value = errMsg
-                withContext(Dispatchers.Main) { onResult?.invoke(false, errMsg) }
                 Pair(false, errMsg)
             }
         } catch (e: Exception) {
-            val errorMsg = "WiFi Send Failed: ${e.message ?: "Connection error"}"
+            val errorMsg = "Wi-Fi Send Failed: ${e.message ?: "Connection error"}"
             _wifiStatus.value = WifiStatus.FAILED
             _lastMessage.value = errorMsg
-            withContext(Dispatchers.Main) { onResult?.invoke(false, errorMsg) }
             Pair(false, errorMsg)
         }
+    }
+
+    /**
+     * Sends barcode and current Tally sequence steps to the PC over Wi-Fi.
+     * Automatically handles dynamic IP changes (recovers via UDP broadcast on failure).
+     */
+    suspend fun sendBarcode(
+        barcode: String,
+        profile: TallyProfile?,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (!_isWifiMode.value) {
+            val msg = "Wi-Fi mode is disabled"
+            withContext(Dispatchers.Main) { onResult?.invoke(false, msg) }
+            return@withContext Pair(false, msg)
+        }
+
+        val scanId = UUID.randomUUID().toString()
+
+        // 1. Attempt send with current IP
+        val firstAttempt = sendHttpScan(_serverIp.value, barcode, profile, scanId)
+        if (firstAttempt.first) {
+            withContext(Dispatchers.Main) { onResult?.invoke(true, firstAttempt.second) }
+            return@withContext firstAttempt
+        }
+
+        // 2. If first attempt failed (e.g. router rebooted or PC changed dynamic IP):
+        // Automatically run instant UDP discovery and retry once!
+        Log.w(TAG, "First send attempt to ${_serverIp.value} failed. Auto-recovering via UDP discovery...")
+        val rediscovered = runUdpDiscoverySync()
+        if (rediscovered) {
+            Log.i(TAG, "PC re-discovered at new IP: ${_serverIp.value}. Retrying barcode send...")
+            val retryAttempt = sendHttpScan(_serverIp.value, barcode, profile, scanId)
+            withContext(Dispatchers.Main) {
+                onResult?.invoke(retryAttempt.first, retryAttempt.second)
+            }
+            return@withContext retryAttempt
+        }
+
+        // Neither attempt succeeded
+        withContext(Dispatchers.Main) { onResult?.invoke(false, firstAttempt.second) }
+        firstAttempt
     }
 }
