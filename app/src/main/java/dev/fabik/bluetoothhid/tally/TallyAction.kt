@@ -9,6 +9,12 @@ enum class TallyActionType(val displayName: String, val iconName: String) {
     PRESS_ESCAPE("Press Escape", "Close"),
     PRESS_BACKSPACE("Press Backspace", "Backspace"),
     PRESS_SPACE("Press Space", "SpaceBar"),
+    PRESS_UP("Press Up Arrow", "ArrowUpward"),
+    PRESS_DOWN("Press Down Arrow", "ArrowDownward"),
+    PRESS_LEFT("Press Left Arrow", "ArrowBack"),
+    PRESS_RIGHT("Press Right Arrow", "ArrowForward"),
+    PRESS_PAGE_UP("Press Page Up", "KeyboardArrowUp"),
+    PRESS_PAGE_DOWN("Press Page Down", "KeyboardArrowDown"),
     PRESS_FUNCTION_KEY("Press Function Key (F1-F12)", "SmartButton"),
     PRESS_SHORTCUT("Press Shortcut (Ctrl/Alt combo)", "KeyboardCommandKey"),
     WAIT("Wait Delay", "HourglassEmpty"),
@@ -39,6 +45,12 @@ data class TallyStep(
             TallyActionType.PRESS_ESCAPE -> "Press Escape (Esc)"
             TallyActionType.PRESS_BACKSPACE -> "Press Backspace"
             TallyActionType.PRESS_SPACE -> "Press Space"
+            TallyActionType.PRESS_UP -> "Press Up Arrow"
+            TallyActionType.PRESS_DOWN -> "Press Down Arrow"
+            TallyActionType.PRESS_LEFT -> "Press Left Arrow"
+            TallyActionType.PRESS_RIGHT -> "Press Right Arrow"
+            TallyActionType.PRESS_PAGE_UP -> "Press Page Up"
+            TallyActionType.PRESS_PAGE_DOWN -> "Press Page Down"
             TallyActionType.PRESS_FUNCTION_KEY -> "Press $key"
             TallyActionType.PRESS_SHORTCUT -> {
                 val modStr = if (modifiers.isNotEmpty()) modifiers.joinToString(" + ") + " + " else ""
