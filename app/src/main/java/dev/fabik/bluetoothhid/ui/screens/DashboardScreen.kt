@@ -481,7 +481,7 @@ fun DashboardScreen(
                             )
                         }
                         Icon(
-                            Icons.Default.ArrowForward,
+                            Icons.Filled.Send,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.7f),
                             modifier = Modifier.size(20.dp)

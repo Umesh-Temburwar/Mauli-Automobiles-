@@ -285,6 +285,14 @@ object TallyAutomationEngine {
                 sendKeyDirect(sender, 0u, 0x4Eu, step.delayMs)
             }
 
+            TallyActionType.PRESS_KEY -> {
+                // Generic raw key press – supports any named key (HOME, END, DELETE, INSERT, letters, etc.)
+                val modifierByte = calculateModifierByte(step.modifiers)
+                val keyScanCode = getScanCodeForKeyName(step.key)
+                Log.d(TAG, "Pressing Raw Key: mods=$modifierByte key=${step.key} (0x${keyScanCode.toString(16)})")
+                sendKeyDirect(sender, modifierByte, keyScanCode, step.delayMs)
+            }
+
             TallyActionType.PRESS_FUNCTION_KEY -> {
                 val fScanCode = getFunctionKeyScanCode(step.key)
                 Log.d(TAG, "Pressing Function Key ${step.key} (0x${fScanCode.toString(16)})")
@@ -323,8 +331,8 @@ object TallyAutomationEngine {
         scanCode: UByte,
         postDelayMs: Long
     ) {
-        // Send key down with modifiers
-        sender.sendKey(modifier.toByte(), scanCode.toByte(), releaseKey = true, releaseDelay = 40)
+        // Send key down with modifiers (note: KeyboardSender.sendKey takes key first, modifier second)
+        sender.sendKey(key = scanCode.toByte(), modifier = modifier.toByte(), releaseKey = true, releaseDelay = 40)
         delay(postDelayMs)
     }
 

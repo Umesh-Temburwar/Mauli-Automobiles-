@@ -122,17 +122,18 @@ open class KeyboardSender(
         key: Byte,
         modifier: Byte = 0,
         releaseKey: Boolean = true,
-        releaseDelay: Long = 10
+        releaseDelay: Long = 20
     ) {
-        report[0] = modifier
-        report[2] = key
-
-        sendReport(report)
+        val pressReport = byteArrayOf(modifier, 0, key)
+        sendReport(pressReport)
 
         if (releaseKey) {
-            report.fill(0)
-            delay(releaseDelay)
-            sendReport(report)
+            delay(releaseDelay.coerceAtLeast(20L))
+            val releaseReport = byteArrayOf(0, 0, 0)
+            // Send release report twice to prevent dropped HID packets from causing infinite key-repeat loops
+            sendReport(releaseReport)
+            delay(5)
+            sendReport(releaseReport)
         }
     }
 }

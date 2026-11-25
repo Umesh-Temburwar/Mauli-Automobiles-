@@ -17,6 +17,7 @@ enum class TallyActionType(val displayName: String, val iconName: String) {
     PRESS_PAGE_DOWN("Press Page Down", "KeyboardArrowDown"),
     PRESS_FUNCTION_KEY("Press Function Key (F1-F12)", "SmartButton"),
     PRESS_SHORTCUT("Press Shortcut (Ctrl/Alt combo)", "KeyboardCommandKey"),
+    PRESS_KEY("Press Raw Key", "Keyboard"),
     WAIT("Wait Delay", "HourglassEmpty"),
     TYPE_TEXT("Type Custom Text", "TextFields"),
     END_SEQUENCE("End Sequence", "StopCircle")
@@ -56,9 +57,16 @@ data class TallyStep(
                 val modStr = if (modifiers.isNotEmpty()) modifiers.joinToString(" + ") + " + " else ""
                 "Press $modStr$key"
             }
+            TallyActionType.PRESS_KEY -> {
+                val modStr = if (modifiers.isNotEmpty()) modifiers.joinToString("+") + "+" else ""
+                "Key: $modStr$key"
+            }
             TallyActionType.WAIT -> "Wait: ${delayMs}ms"
             TallyActionType.TYPE_TEXT -> "Type: \"$textPayload\""
             TallyActionType.END_SEQUENCE -> "End Automation Sequence"
         }
     }
+
+    /** Alias for getSummaryText – used in keyboard remote UI */
+    fun describe() = getSummaryText()
 }
