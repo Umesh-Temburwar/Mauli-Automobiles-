@@ -90,7 +90,10 @@ import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.generator.CustomerBillingPdfGenerator
 import dev.fabik.bluetoothhid.ui.CameraPreviewContent
 import dev.fabik.bluetoothhid.ui.RequiresCameraPermission
+import dev.fabik.bluetoothhid.ui.SoundToggleAction
 import dev.fabik.bluetoothhid.ui.model.BarcodeResult
+import dev.fabik.bluetoothhid.utils.PreferenceStore
+import dev.fabik.bluetoothhid.utils.getPreferenceStateDefault
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -150,18 +153,25 @@ fun CustomerDailyScanScreen(
         }
     }
 
+    val playSound by context.getPreferenceStateDefault(PreferenceStore.PLAY_SOUND)
+    val vibratePref by context.getPreferenceStateDefault(PreferenceStore.VIBRATE)
+
     fun playBeepAndVibrate() {
-        try {
-            toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 140)
-        } catch (_: Exception) {}
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(70)
-            }
-        } catch (_: Exception) {}
+        if (playSound) {
+            try {
+                toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 140)
+            } catch (_: Exception) {}
+        }
+        if (vibratePref) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(70)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     fun reloadData() {
@@ -235,6 +245,7 @@ fun CustomerDailyScanScreen(
                     }
                 },
                 actions = {
+                    SoundToggleAction()
                     if (customerScans.isNotEmpty()) {
                         IconButton(onClick = { showClearConfirmDialog = true }) {
                             Icon(Icons.Default.Delete, contentDescription = "Clear List", tint = MaterialTheme.colorScheme.error)
