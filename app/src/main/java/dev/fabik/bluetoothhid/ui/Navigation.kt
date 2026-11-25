@@ -54,6 +54,7 @@ import dev.fabik.bluetoothhid.ui.screens.CustomerDailyScanScreen
 import dev.fabik.bluetoothhid.ui.screens.ProductDetailScreen
 import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
 import dev.fabik.bluetoothhid.ui.screens.TallyKeyboardScreen
+import dev.fabik.bluetoothhid.ui.screens.TallyKeyboardScreen
 import dev.fabik.bluetoothhid.data.MasterProduct
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.generator.BarcodePdfGenerator
@@ -283,6 +284,12 @@ fun NavGraph() {
 
             composable(Routes.TallyAutomation) {
                 TallyAutomationScreen(
+                    onNavigateBack = { navController.navigateUp() }
+                )
+            }
+
+            composable(Routes.TallyKeyboard) {
+                TallyKeyboardScreen(
                     onNavigateBack = { navController.navigateUp() }
                 )
             }
