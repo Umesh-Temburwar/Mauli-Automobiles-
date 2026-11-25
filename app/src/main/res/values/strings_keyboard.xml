@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keyboard_title">Tally Wireless Keyboard</string>
+    <string name="keyboard_text_hint">Type text / barcode for Tally...</string>
+    <string name="keyboard_btn_send">Send</string>
+    <string name="keyboard_btn_send_enter">Send + ↵</string>
+    <string name="keyboard_status_connected">Connected: Ready for input</string>
+    <string name="keyboard_status_disconnected">Not Connected: Tap to pair or connect Wi-Fi</string>
+    <string name="keyboard_tally_shortcuts">Tally Shortcuts</string>
+    <string name="keyboard_function_keys">Function Keys (F1-F12)</string>
+    <string name="keyboard_numpad_title">Numeric Keypad</string>
+    <string name="keyboard_nav_title">Navigation Arrows</string>
+</resources>
