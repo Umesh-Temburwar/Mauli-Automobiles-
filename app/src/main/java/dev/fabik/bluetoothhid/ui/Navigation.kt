@@ -53,6 +53,7 @@ import dev.fabik.bluetoothhid.ui.screens.CatalogueScreen
 import dev.fabik.bluetoothhid.ui.screens.CustomerDailyScanScreen
 import dev.fabik.bluetoothhid.ui.screens.ProductDetailScreen
 import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
+import dev.fabik.bluetoothhid.ui.screens.TallyKeyboardScreen
 import dev.fabik.bluetoothhid.data.MasterProduct
 import dev.fabik.bluetoothhid.data.MauliDatabase
 import dev.fabik.bluetoothhid.generator.BarcodePdfGenerator
@@ -63,6 +64,7 @@ object Routes {
     const val Catalogue = "Catalogue"
     const val ProductDetail = "ProductDetail/{productId}"
     fun productDetailRoute(productId: Long) = "ProductDetail/$productId"
+    const val TallyKeyboard = "TallyKeyboard"
     const val TallyAutomation = "TallyAutomation"
     const val PdfImport = "PdfImport"
     const val Verification = "Verification/{batchId}"
@@ -135,7 +137,8 @@ fun NavGraph() {
                     onNavigateToCameraScanner = { navController.navigate(Routes.Main) },
                     onNavigateToTallyAutomation = { navController.navigate(Routes.TallyAutomation) },
                     onNavigateToCustomerDailyScan = { navController.navigate(Routes.CustomerDailyScan) },
-                    onNavigateToCatalogue = { navController.navigate(Routes.Catalogue) }
+                    onNavigateToCatalogue = { navController.navigate(Routes.Catalogue) },
+                    onNavigateToKeyboard = { navController.navigate(Routes.TallyKeyboard) }
                 )
 
                 // Confirm back presses to exit the app from Dashboard
@@ -151,6 +154,12 @@ fun NavGraph() {
                         }
                     }
                 }
+            }
+
+            composable(Routes.TallyKeyboard) {
+                TallyKeyboardScreen(
+                    onNavigateBack = { navController.navigateUp() }
+                )
             }
 
             composable(Routes.PdfImport) {
