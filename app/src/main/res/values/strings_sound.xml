@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sound_toggle_on">Sound ON (Beep enabled)</string>
+    <string name="sound_toggle_off">Sound OFF (Muted)</string>
+    <string name="sound_toggle_desc">Toggle scan beep and keyboard click sounds</string>
+</resources>
