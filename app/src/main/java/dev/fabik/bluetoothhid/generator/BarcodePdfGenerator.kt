@@ -14,6 +14,8 @@ import android.print.PrintManager
 import androidx.core.content.FileProvider
 import dev.fabik.bluetoothhid.data.BarcodeRecord
 import dev.fabik.bluetoothhid.data.BillBatch
+import dev.fabik.bluetoothhid.data.MasterProduct
+import dev.fabik.bluetoothhid.ui.image.MauliImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -247,5 +249,132 @@ object BarcodePdfGenerator {
         context.startActivity(Intent.createChooser(intent, "Share Barcode PDF").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
+    }
+
+    /**
+     * Generates an official A4 product barcode & image label sheet for a single MasterProduct.
+     */
+    suspend fun generateProductLabelPdf(
+        context: Context,
+        product: MasterProduct
+    ): File = withContext(Dispatchers.IO) {
+        val outputDir = File(context.filesDir, "generated_pdfs").apply { mkdirs() }
+        val filename = "Label_${product.oemPartNumber.replace("/", "_").replace("-", "_")}_${System.currentTimeMillis()}.pdf"
+        val pdfFile = File(outputDir, filename)
+
+        val pdfDoc = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create()
+        val page = pdfDoc.startPage(pageInfo)
+        val canvas = page.canvas
+
+        val titlePaint = Paint().apply {
+            color = Color.BLACK
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textSize = 15f
+            isAntiAlias = true
+        }
+
+        val subPaint = Paint().apply {
+            color = Color.DKGRAY
+            textSize = 9f
+            isAntiAlias = true
+        }
+
+        val borderPaint = Paint().apply {
+            color = Color.LTGRAY
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+            isAntiAlias = true
+        }
+
+        // Header
+        canvas.drawText("MAULI AUTOMOBILES • Ambajogai", MARGIN_X.toFloat(), 36f, titlePaint)
+        canvas.drawText("Hero & Honda Genuine Spare Parts Specialist | Ph: 098232 91444", MARGIN_X.toFloat(), 50f, subPaint)
+        canvas.drawLine(MARGIN_X.toFloat(), 60f, (A4_WIDTH - MARGIN_X).toFloat(), 60f, borderPaint)
+
+        // Draw 4 printable labels on the page in a 2x2 grid
+        val labelW = (A4_WIDTH - (MARGIN_X * 2) - 20) / 2f
+        val labelH = 340f
+
+        val barcodeVal = product.originalBarcode.ifBlank { product.oemPartNumber }
+        val barcodeBitmap = BarcodeGenerator.generateCode128(
+            content = barcodeVal,
+            width = 420,
+            height = 130,
+            showText = true
+        )
+
+        val productBitmap = MauliImageLoader.loadImage(context, product.imageUrl, product.localImagePath)
+            ?: MauliImageLoader.createOemPlaceholder(product.brand, product.oemPartNumber, product.category)
+
+        for (gridIdx in 0 until 4) {
+            val col = gridIdx % 2
+            val row = gridIdx / 2
+            val left = MARGIN_X + col * (labelW + 20)
+            val top = 80f + row * (labelH + 16)
+            val rect = RectF(left, top, left + labelW, top + labelH)
+
+            // Draw label box
+            canvas.drawRoundRect(rect, 8f, 8f, borderPaint)
+
+            // Draw Product Image
+            val imgRect = RectF(rect.left + 12f, rect.top + 12f, rect.right - 12f, rect.top + 150f)
+            canvas.drawBitmap(productBitmap, null, imgRect, null)
+
+            // Details
+            val namePaint = Paint().apply {
+                color = Color.BLACK
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText(product.productName.take(34), rect.left + 12f, rect.top + 172f, namePaint)
+
+            val partPaint = Paint().apply {
+                color = Color.rgb(194, 65, 12)
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("Part No: ${product.oemPartNumber} • ${product.brand}", rect.left + 12f, rect.top + 188f, partPaint)
+
+            val fitPaint = Paint().apply {
+                color = Color.DKGRAY
+                textSize = 8.5f
+                isAntiAlias = true
+            }
+            canvas.drawText("Fits: ${product.vehicleModel.take(38)}", rect.left + 12f, rect.top + 202f, fitPaint)
+
+            val mrpPaint = Paint().apply {
+                color = Color.rgb(21, 128, 61)
+                textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            canvas.drawText("MRP: ₹${"%.2f".format(product.mrp)}", rect.left + 12f, rect.top + 220f, mrpPaint)
+
+            // Draw Barcode Bitmap
+            val bcRect = RectF(rect.left + 12f, rect.top + 230f, rect.right - 12f, rect.top + 325f)
+            canvas.drawBitmap(barcodeBitmap, null, bcRect, null)
+        }
+
+        barcodeBitmap.recycle()
+
+        val footerPaint = Paint().apply {
+            color = Color.GRAY
+            textSize = 8f
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
+        canvas.drawText("MAULI AUTOMOBILES • AMBAJOGAI • OFFICIAL BARCODE & SPARE PARTS LABEL SHEET", (A4_WIDTH / 2).toFloat(), (A4_HEIGHT - 20).toFloat(), footerPaint)
+
+        pdfDoc.finishPage(page)
+
+        FileOutputStream(pdfFile).use { out ->
+            pdfDoc.writeTo(out)
+        }
+        pdfDoc.close()
+
+        pdfFile
     }
 }

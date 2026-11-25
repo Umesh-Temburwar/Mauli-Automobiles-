@@ -49,12 +49,23 @@ import dev.fabik.bluetoothhid.tally.AutomationMode
 import dev.fabik.bluetoothhid.tally.TallyAutomationEngine
 import dev.fabik.bluetoothhid.tally.TallyProfileRepository
 import dev.fabik.bluetoothhid.tally.WifiTallyManager
+import dev.fabik.bluetoothhid.ui.screens.CatalogueScreen
 import dev.fabik.bluetoothhid.ui.screens.CustomerDailyScanScreen
+import dev.fabik.bluetoothhid.ui.screens.ProductDetailScreen
 import dev.fabik.bluetoothhid.ui.screens.TallyAutomationScreen
+import dev.fabik.bluetoothhid.ui.screens.TallyKeyboardScreen
+import dev.fabik.bluetoothhid.ui.screens.TallyKeyboardScreen
+import dev.fabik.bluetoothhid.data.MasterProduct
+import dev.fabik.bluetoothhid.data.MauliDatabase
+import dev.fabik.bluetoothhid.generator.BarcodePdfGenerator
 
 object Routes {
     const val Dashboard = "Dashboard"
     const val CustomerDailyScan = "CustomerDailyScan"
+    const val Catalogue = "Catalogue"
+    const val ProductDetail = "ProductDetail/{productId}"
+    fun productDetailRoute(productId: Long) = "ProductDetail/$productId"
+    const val TallyKeyboard = "TallyKeyboard"
     const val TallyAutomation = "TallyAutomation"
     const val PdfImport = "PdfImport"
     const val Verification = "Verification/{batchId}"
@@ -126,7 +137,9 @@ fun NavGraph() {
                     onNavigateToReports = { navController.navigate(Routes.Reports) },
                     onNavigateToCameraScanner = { navController.navigate(Routes.Main) },
                     onNavigateToTallyAutomation = { navController.navigate(Routes.TallyAutomation) },
-                    onNavigateToCustomerDailyScan = { navController.navigate(Routes.CustomerDailyScan) }
+                    onNavigateToCustomerDailyScan = { navController.navigate(Routes.CustomerDailyScan) },
+                    onNavigateToCatalogue = { navController.navigate(Routes.Catalogue) },
+                    onNavigateToKeyboard = { navController.navigate(Routes.TallyKeyboard) }
                 )
 
                 // Confirm back presses to exit the app from Dashboard
@@ -142,6 +155,12 @@ fun NavGraph() {
                         }
                     }
                 }
+            }
+
+            composable(Routes.TallyKeyboard) {
+                TallyKeyboardScreen(
+                    onNavigateBack = { navController.navigateUp() }
+                )
             }
 
             composable(Routes.PdfImport) {
@@ -223,8 +242,54 @@ fun NavGraph() {
                 )
             }
 
+            composable(Routes.Catalogue) {
+                CatalogueScreen(
+                    onNavigateBack = { navController.navigateUp() },
+                    onProductSelected = { prod ->
+                        navController.navigate(Routes.productDetailRoute(prod.id))
+                    }
+                )
+            }
+
+            composable(
+                route = Routes.ProductDetail,
+                arguments = listOf(navArgument("productId") { type = NavType.LongType; defaultValue = 0L })
+            ) { backStackEntry ->
+                val prodId = backStackEntry.arguments?.getLong("productId") ?: 0L
+                val db = remember { MauliDatabase.getInstance(context) }
+                var product by remember { mutableStateOf<MasterProduct?>(null) }
+
+                LaunchedEffect(prodId) {
+                    val all = db.getAllProducts()
+                    product = all.find { it.id == prodId }
+                }
+
+                product?.let { prod ->
+                    ProductDetailScreen(
+                        product = prod,
+                        onNavigateBack = { navController.navigateUp() },
+                        onGenerateBarcodePdf = { targetProd ->
+                            scope.launch {
+                                try {
+                                    val file = BarcodePdfGenerator.generateProductLabelPdf(context, targetProd)
+                                    BarcodePdfGenerator.sharePdf(context, file)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "PDF Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
             composable(Routes.TallyAutomation) {
                 TallyAutomationScreen(
+                    onNavigateBack = { navController.navigateUp() }
+                )
+            }
+
+            composable(Routes.TallyKeyboard) {
+                TallyKeyboardScreen(
                     onNavigateBack = { navController.navigateUp() }
                 )
             }
@@ -251,6 +316,7 @@ fun NavGraph() {
                 val tallyRepo = remember { TallyProfileRepository.getInstance(context) }
                 val automationMode by tallyRepo.automationMode.collectAsStateWithLifecycle()
                 val activeProfile by tallyRepo.activeProfile.collectAsStateWithLifecycle()
+                val db = remember { MauliDatabase.getInstance(context) }
 
                 // Unbounded channel ensures every barcode result is queued even during active sends
                 val sendQueue = remember { Channel<BarcodeResult>(Channel.UNLIMITED) }
@@ -264,9 +330,15 @@ fun NavGraph() {
                         if (wifiManager.isWifiMode.value) {
                             // 📶 WIRELESS WIFI TALLY MODE (Zero Bluetooth needed!)
                             scope.launch {
+                                val matchedProd = db.findProductByBarcode(result.text)
                                 val (success, msg) = wifiManager.sendBarcode(result.text, activeProfile)
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, if (success) "WiFi Tally: $msg" else "WiFi Error: $msg", Toast.LENGTH_SHORT).show()
+                                    val feedback = if (matchedProd != null && success) {
+                                        "✓ ${matchedProd.productName} (₹${matchedProd.mrp.toInt()}) ➔ Tally"
+                                    } else {
+                                        if (success) "WiFi Tally: $msg" else "WiFi Error: $msg"
+                                    }
+                                    Toast.makeText(context, feedback, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         } else {

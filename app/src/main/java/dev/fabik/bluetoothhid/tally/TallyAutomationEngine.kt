@@ -140,6 +140,83 @@ object TallyAutomationEngine {
         }
     }
 
+    /**
+     * Sends a single raw key action directly into Tally via either Wi-Fi or Bluetooth HID.
+     */
+    fun sendDirectKeyAction(
+        scope: CoroutineScope,
+        step: TallyStep,
+        controller: BluetoothController?,
+        wifiManager: WifiTallyManager?,
+        layout: String = "us",
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        scope.launch(Dispatchers.IO) {
+            var sent = false
+            // 1. Prioritize Wi-Fi if enabled and connected
+            if (wifiManager != null && wifiManager.isWifiMode.value && wifiManager.wifiStatus.value == WifiStatus.CONNECTED) {
+                sent = wifiManager.sendDirectKeySync(step)
+            }
+            // 2. Fall back to Bluetooth HID if not sent
+            if (!sent && controller?.keyboardSender != null) {
+                try {
+                    executeSingleStep(step, "", controller.keyboardSender!!, layout)
+                    sent = true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Bluetooth send error: ${e.message}")
+                }
+            }
+            withContext(Dispatchers.Main) {
+                onComplete?.invoke(sent)
+            }
+        }
+    }
+
+    /**
+     * Sends custom text or barcode string directly into Tally via either Wi-Fi or Bluetooth HID.
+     */
+    fun sendDirectText(
+        scope: CoroutineScope,
+        text: String,
+        withEnter: Boolean,
+        controller: BluetoothController?,
+        wifiManager: WifiTallyManager?,
+        layout: String = "us",
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        scope.launch(Dispatchers.IO) {
+            var sent = false
+            if (wifiManager != null && wifiManager.isWifiMode.value && wifiManager.wifiStatus.value == WifiStatus.CONNECTED) {
+                sent = wifiManager.sendTextSync(text, withEnter)
+            }
+            if (!sent && controller?.keyboardSender != null) {
+                try {
+                    val suffix = if (withEnter) ExtraKeys.ENTER else ExtraKeys.NONE
+                    controller.keyboardSender!!.sendProcessedString(text, 10, suffix, layout)
+                    sent = true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Bluetooth send text error: ${e.message}")
+                }
+            }
+            withContext(Dispatchers.Main) {
+                onComplete?.invoke(sent)
+            }
+        }
+    }
+
+    /**
+     * Executes a single Tally step directly via Bluetooth HID.
+     * Used by the Tally Wireless Keyboard remote screen.
+     */
+    suspend fun executeStepDirect(
+        step: TallyStep,
+        sender: KeyboardSender,
+        layout: String = "us",
+        barcode: String = ""
+    ) {
+        executeSingleStep(step, barcode, sender, layout)
+    }
+
     private suspend fun executeSingleStep(
         step: TallyStep,
         barcode: String,
@@ -176,6 +253,44 @@ object TallyAutomationEngine {
             TallyActionType.PRESS_SPACE -> {
                 Log.d(TAG, "Pressing SPACE")
                 sendKeyDirect(sender, 0u, 0x2Cu, step.delayMs)
+            }
+
+            TallyActionType.PRESS_UP -> {
+                Log.d(TAG, "Pressing UP ARROW")
+                sendKeyDirect(sender, 0u, 0x52u, step.delayMs)
+            }
+
+            TallyActionType.PRESS_DOWN -> {
+                Log.d(TAG, "Pressing DOWN ARROW")
+                sendKeyDirect(sender, 0u, 0x51u, step.delayMs)
+            }
+
+            TallyActionType.PRESS_LEFT -> {
+                Log.d(TAG, "Pressing LEFT ARROW")
+                sendKeyDirect(sender, 0u, 0x50u, step.delayMs)
+            }
+
+            TallyActionType.PRESS_RIGHT -> {
+                Log.d(TAG, "Pressing RIGHT ARROW")
+                sendKeyDirect(sender, 0u, 0x4Fu, step.delayMs)
+            }
+
+            TallyActionType.PRESS_PAGE_UP -> {
+                Log.d(TAG, "Pressing PAGE UP")
+                sendKeyDirect(sender, 0u, 0x4Bu, step.delayMs)
+            }
+
+            TallyActionType.PRESS_PAGE_DOWN -> {
+                Log.d(TAG, "Pressing PAGE DOWN")
+                sendKeyDirect(sender, 0u, 0x4Eu, step.delayMs)
+            }
+
+            TallyActionType.PRESS_KEY -> {
+                // Generic raw key press – supports any named key (HOME, END, DELETE, INSERT, letters, etc.)
+                val modifierByte = calculateModifierByte(step.modifiers)
+                val keyScanCode = getScanCodeForKeyName(step.key)
+                Log.d(TAG, "Pressing Raw Key: mods=$modifierByte key=${step.key} (0x${keyScanCode.toString(16)})")
+                sendKeyDirect(sender, modifierByte, keyScanCode, step.delayMs)
             }
 
             TallyActionType.PRESS_FUNCTION_KEY -> {
@@ -216,8 +331,8 @@ object TallyAutomationEngine {
         scanCode: UByte,
         postDelayMs: Long
     ) {
-        // Send key down with modifiers
-        sender.sendKey(modifier.toByte(), scanCode.toByte(), releaseKey = true, releaseDelay = 40)
+        // Send key down with modifiers (note: KeyboardSender.sendKey takes key first, modifier second)
+        sender.sendKey(key = scanCode.toByte(), modifier = modifier.toByte(), releaseKey = true, releaseDelay = 40)
         delay(postDelayMs)
     }
 

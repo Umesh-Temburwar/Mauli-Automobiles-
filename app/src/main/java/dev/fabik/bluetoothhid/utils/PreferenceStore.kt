@@ -279,8 +279,8 @@ open class PreferenceStore {
         val MULTI_CODE_DETECTION = booleanPreferencesKey("multi_code_detection") defaultsTo false
         val MULTI_CODE_IGNORE_DUPLICATES =
             booleanPreferencesKey("multi_code_ignore_duplicates") defaultsTo false
-        val PLAY_SOUND = booleanPreferencesKey("play_sound") defaultsTo false
-        val VIBRATE = booleanPreferencesKey("vibrate") defaultsTo false
+        val PLAY_SOUND = booleanPreferencesKey("play_sound") defaultsTo true
+        val VIBRATE = booleanPreferencesKey("vibrate") defaultsTo true
         val AUTO_COPY_TO_CLIPBOARD = booleanPreferencesKey("auto_copy_to_clipboard") defaultsTo false
         val CLEAR_AFTER_SEND = booleanPreferencesKey("clear_after_send") defaultsTo false
         val ENABLE_UNDO_SEND = booleanPreferencesKey("enable_undo_send") defaultsTo false

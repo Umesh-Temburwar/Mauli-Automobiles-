@@ -80,3 +80,65 @@ data class CustomerScansSummary(
     val totalAmount: Double = 0.0,
     val uniqueBarcodes: Int = 0
 )
+
+data class MasterProduct(
+    val id: Long = 0,
+    val productName: String,
+    val productDescription: String = "",
+    val manufacturer: String,
+    val brand: String,
+    val oemPartNumber: String,
+    val alternativePartNumber: String = "",
+    val supersededPartNumber: String = "",
+    val originalBarcode: String,
+    val barcodeType: String = "EAN_13",
+    val gtin: String = "",
+    val ean13: String = "",
+    val internalBarcode: String = "",
+    val category: String,
+    val subcategory: String = "",
+    val vehicleModel: String,
+    val manufacturingYear: String = "",
+    val mrp: Double = 0.0,
+    val sellingPrice: Double = 0.0,
+    val currency: String = "INR",
+    val hsnCode: String = "",
+    val gstRate: Double = 28.0,
+    val unit: String = "PCS",
+    val imageUrl: String = "",
+    val thumbnailUrl: String = "",
+    val localImagePath: String = "",
+    val officialProductUrl: String = "",
+    val imageVerificationStatus: String = "Official Verified",
+    val barcodeVerificationStatus: String = "Verified EAN-13",
+    val dataSource: String = "",
+    val lastVerifiedAt: String = ""
+)
+
+data class ProductImageRecord(
+    val imageId: Long = 0,
+    val productId: Long,
+    val productName: String,
+    val oemPartNumber: String,
+    val barcode: String,
+    val brand: String,
+    val imageUrl: String,
+    val thumbnailUrl: String = "",
+    val officialProductPageUrl: String = "",
+    val imageSourceName: String = "",
+    val imageFormat: String = "PNG",
+    val imageFileSize: Long = 0,
+    val isPrimaryImage: Boolean = true,
+    val isVerified: Boolean = true,
+    val verificationMethod: String = "EXACT_OEM_MATCH",
+    val localImagePath: String = ""
+)
+
+data class CatalogueStats(
+    val totalProducts: Int = 0,
+    val heroProducts: Int = 0,
+    val hondaProducts: Int = 0,
+    val productsWithImages: Int = 0,
+    val verifiedBarcodes: Int = 0,
+    val totalCategories: Int = 0
+)

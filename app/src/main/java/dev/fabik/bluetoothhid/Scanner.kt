@@ -133,6 +133,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.fabik.bluetoothhid.ui.SoundToggleAction
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.fabik.bluetoothhid.bt.ExternalProtocol
 import dev.fabik.bluetoothhid.bt.KeyTranslator
@@ -900,6 +901,9 @@ private fun ScannerAppBar(
         actions = {
             val wifiManager = remember { WifiTallyManager.getInstance(context) }
             val isWifiMode by wifiManager.isWifiMode.collectAsStateWithLifecycle()
+
+            // 1-Tap Sound / Beep On-Off toggle
+            SoundToggleAction()
 
             // Emergency Stop for running Tally automation sequences
             IconButton(

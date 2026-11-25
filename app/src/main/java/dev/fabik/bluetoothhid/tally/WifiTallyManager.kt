@@ -349,4 +349,39 @@ class WifiTallyManager private constructor(private val context: Context) {
         withContext(Dispatchers.Main) { onResult?.invoke(false, firstAttempt.second) }
         firstAttempt
     }
+
+    /**
+     * Sends a single raw key action directly into Tally over Wi-Fi.
+     * Used by the Tally Wireless Keyboard remote screen.
+     */
+    suspend fun sendDirectKeySync(step: TallyStep): Boolean = withContext(Dispatchers.IO) {
+        if (!_isWifiMode.value) return@withContext false
+        val dummyProfile = TallyProfile(
+            id = "keyboard_direct",
+            name = "KeyboardDirect",
+            steps = listOf(step)
+        )
+        val result = sendBarcode("", dummyProfile)
+        result.first
+    }
+
+    /**
+     * Sends custom text or barcode string directly into Tally over Wi-Fi.
+     */
+    suspend fun sendTextSync(text: String, withEnter: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        if (!_isWifiMode.value) return@withContext false
+        val steps = mutableListOf(
+            TallyStep(type = TallyActionType.TYPE_TEXT, textPayload = text, delayMs = 30L)
+        )
+        if (withEnter) {
+            steps.add(TallyStep(type = TallyActionType.PRESS_ENTER, delayMs = 30L))
+        }
+        val dummyProfile = TallyProfile(
+            id = "keyboard_text",
+            name = "KeyboardText",
+            steps = steps
+        )
+        val result = sendBarcode(text, dummyProfile)
+        result.first
+    }
 }
