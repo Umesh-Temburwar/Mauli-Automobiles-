@@ -110,8 +110,11 @@ import dev.fabik.bluetoothhid.ocr.MlKitOcrProvider
 import dev.fabik.bluetoothhid.pdf.PdfImporter
 import dev.fabik.bluetoothhid.ui.CameraPreviewContent
 import dev.fabik.bluetoothhid.ui.RequiresCameraPermission
+import dev.fabik.bluetoothhid.ui.SoundToggleAction
 import dev.fabik.bluetoothhid.ui.model.BarcodeResult
 import dev.fabik.bluetoothhid.utils.ExtraKeys
+import dev.fabik.bluetoothhid.utils.PreferenceStore
+import dev.fabik.bluetoothhid.utils.getPreferenceStateDefault
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -172,12 +175,16 @@ fun BatchScannerScreen(
         try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) } catch (e: Exception) { null }
     }
 
+    val playSound by context.getPreferenceStateDefault(PreferenceStore.PLAY_SOUND)
+
     fun playFeedback(isDuplicate: Boolean) {
         try {
-            if (isDuplicate) {
-                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 180)
-            } else {
-                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+            if (playSound) {
+                if (isDuplicate) {
+                    toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 180)
+                } else {
+                    toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+                }
             }
 
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -540,6 +547,7 @@ fun BatchScannerScreen(
                     }
                 },
                 actions = {
+                    SoundToggleAction()
                     // Quick snap bill photo from top bar
                     IconButton(onClick = { billCameraLauncher.launch(null) }) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = "Snap Bill", tint = Color(0xFFE65100))
