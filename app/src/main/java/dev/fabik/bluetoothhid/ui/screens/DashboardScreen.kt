@@ -98,6 +98,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import dev.fabik.bluetoothhid.tally.WifiTallyManager
 import dev.fabik.bluetoothhid.tally.WifiStatus
+import dev.fabik.bluetoothhid.ui.SoundToggleAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +113,8 @@ fun DashboardScreen(
     onNavigateToCameraScanner: () -> Unit,
     onNavigateToTallyAutomation: () -> Unit = {},
     onNavigateToCustomerDailyScan: () -> Unit = {},
-    onNavigateToCatalogue: () -> Unit = {}
+    onNavigateToCatalogue: () -> Unit = {},
+    onNavigateToKeyboard: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val controller = LocalController.current
@@ -214,6 +216,18 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    // 1-Tap Sound On/Off Toggle
+                    SoundToggleAction()
+
+                    // Wireless Keyboard 1-Tap Shortcut
+                    IconButton(onClick = onNavigateToKeyboard) {
+                        Icon(
+                            Icons.Default.Keyboard,
+                            contentDescription = "Tally Keyboard",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     // Emergency Stop Action in Dashboard Top Bar
                     IconButton(onClick = {
                         TallyAutomationEngine.emergencyStop(controller?.keyboardSender)
@@ -412,6 +426,65 @@ fun DashboardScreen(
                             isConnected = currentDevice != null,
                             deviceName = currentDevice?.name ?: currentDevice?.address,
                             onClick = onNavigateToBluetooth
+                        )
+                    }
+                }
+            }
+
+            // 1.1 Tally Wireless Keyboard Remote (Connect hote hi phone Tally keyboard ban jata hai)
+            item {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToKeyboard() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFF0F172A)
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2563EB)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Keyboard,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "⌨️ Tally Wireless Keyboard Remote",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                "Phone acts as wireless keyboard for TallyPrime (Numpad, Enter, Alt+A, F1-F12)",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.Send,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -722,15 +795,10 @@ fun DashboardScreen(
                 }
             }
 
-            // 2. Summary Statistics Card
-            item {
-                StatsOverviewCard(stats = stats)
-            }
-
-            // 3. Workflow Header
+            // Quick Tools & Utilities
             item {
                 Text(
-                    text = "Automobile Bill to Tally Workflow",
+                    text = "Quick Tools & Reports",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -738,90 +806,43 @@ fun DashboardScreen(
                 )
             }
 
-            // 4. Primary Workflow Actions (Large Touch-Friendly Cards for Shopkeeper)
             item {
-                ActionCard(
-                    title = "1. Import Handwritten PDF",
-                    subtitle = "ग्राहक बिल PDF अपलोड करा (Upload Customer Bill PDF)",
-                    icon = Icons.Default.PictureAsPdf,
-                    accentColor = Color(0xFF1976D2),
-                    onClick = onNavigateToPdfImport
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onNavigateToReports),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Icon(Icons.Default.Assessment, contentDescription = null, tint = Color(0xFF37474F), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Scan History", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Reports & CSV", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    ElevatedCard(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onNavigateToBluetooth),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Icon(Icons.Default.Bluetooth, contentDescription = null, tint = Color(0xFF0277BD), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Bluetooth Pair", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Windows PC HID", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
 
             item {
-                ActionCard(
-                    title = "2. Verify Barcode Numbers",
-                    subtitle = "AI ने काढलेले नंबर तपासा (Review & Edit Extracted Numbers)",
-                    icon = Icons.Default.EditNote,
-                    accentColor = Color(0xFFE65100),
-                    badgeCount = stats.totalNeedsReview.takeIf { it > 0 },
-                    onClick = onNavigateToVerify
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "3. Generate Barcode PDF",
-                    subtitle = "बारकोड शीट प्रिंट करा (Print Code 128 Barcodes)",
-                    icon = Icons.Default.Print,
-                    accentColor = Color(0xFF2E7D32),
-                    onClick = onNavigateToGeneratePdf
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "4. Batch Barcode Scanner",
-                    subtitle = "कॅमेऱ्याने बारकोड Tally मध्ये स्कॅन करा (Scan into Tally)",
-                    icon = Icons.Default.QrCodeScanner,
-                    accentColor = Color(0xFF6A1B9A),
-                    onClick = onNavigateToBatchScanner
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "5. Direct Send to Tally",
-                    subtitle = "विना प्रिंट थेट Tally मध्ये पाठवा (Direct Keyboard Typing)",
-                    icon = Icons.Default.FlashOn,
-                    accentColor = Color(0xFFD81B60),
-                    onClick = onNavigateToDirectSend
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "6. Bluetooth Connect to Tally",
-                    subtitle = "Windows संगणकाशी ब्लूटूथ जोडा (Connect to PC)",
-                    icon = Icons.Default.Bluetooth,
-                    accentColor = Color(0xFF0277BD),
-                    onClick = onNavigateToBluetooth
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "7. Scan History & Reports",
-                    subtitle = "इतिहास व CSV रिपोर्ट डाउनलोड करा (Reports & History)",
-                    icon = Icons.Default.Assessment,
-                    accentColor = Color(0xFF37474F),
-                    onClick = onNavigateToReports
-                )
-            }
-
-            item {
-                ActionCard(
-                    title = "8. Standard Camera Scanner",
-                    subtitle = "सिंगल बारकोड स्कॅनर (Direct Single Scanner)",
-                    icon = Icons.Default.CameraAlt,
-                    accentColor = Color(0xFF455A64),
-                    onClick = onNavigateToCameraScanner
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
@@ -890,113 +911,4 @@ fun BluetoothStatusBar(
     }
 }
 
-@Composable
-fun StatsOverviewCard(stats: SummaryStats) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceAround
-        ) {
-            StatItem(label = "Bills", count = stats.totalBills, color = MaterialTheme.colorScheme.primary)
-            StatItem(label = "Barcodes", count = stats.totalBarcodes, color = MaterialTheme.colorScheme.secondary)
-            StatItem(label = "Scanned", count = stats.totalScanned, color = Color(0xFF2E7D32))
-            StatItem(label = "Pending", count = stats.totalPending, color = Color(0xFFE65100))
-        }
-    }
-}
 
-@Composable
-fun StatItem(label: String, count: Int, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = count.toString(),
-            fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-fun ActionCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    badgeCount: Int? = null,
-    onClick: () -> Unit
-) {
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(accentColor.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (badgeCount != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.Red)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = badgeCount.toString(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        }
-    }
-}
